@@ -1,0 +1,11 @@
+.app-layout {
+  display: flex;
+  min-height: calc(100vh - 72px);
+  background: var(--bg-page);
+}
+
+.app-main {
+  flex: 1;
+  overflow-y: auto;
+  min-width: 0;
+}

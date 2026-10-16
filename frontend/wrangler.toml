@@ -1,0 +1,7 @@
+name = "janamen"
+compatibility_date = "2024-09-23"
+pages_build_output_dir = "dist/frontend/browser"
+
+# Custom domain configuration: kilcdevs.net
+[vars]
+API_URL = "https://janamen-backend-yihgnr1vjc-uc.a.run.app/api"
