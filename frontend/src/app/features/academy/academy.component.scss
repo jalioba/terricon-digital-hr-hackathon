@@ -270,6 +270,10 @@
 
     .hero-actions {
       margin-top: 10px;
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      flex-wrap: wrap;
 
       .btn-start-course {
         display: inline-flex;
@@ -287,6 +291,36 @@
 
         &:hover {
           background-color: #00934d;
+        }
+
+        &.btn-start-tour {
+          background: linear-gradient(135deg, #00a859 0%, #059669 100%);
+          box-shadow: 0 2px 8px rgba(0, 168, 89, 0.25);
+
+          &:hover {
+            box-shadow: 0 4px 14px rgba(0, 168, 89, 0.35);
+          }
+        }
+      }
+
+      .btn-secondary-notes {
+        display: inline-flex;
+        align-items: center;
+        gap: 6px;
+        padding: 9px 16px;
+        background-color: #ffffff;
+        border: 1px solid #cbd5e1;
+        border-radius: 8px;
+        font-size: 13px;
+        font-weight: 600;
+        color: #334155;
+        cursor: pointer;
+        transition: all 0.15s ease;
+
+        &:hover {
+          background-color: #f8fafc;
+          border-color: #94a3b8;
+          color: #0f172a;
         }
       }
     }

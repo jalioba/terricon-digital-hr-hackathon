@@ -106,11 +106,22 @@
           <div class="hero-actions">
             <button
               type="button"
-              class="btn-start-course"
-              (click)="startCourse(course)"
+              class="btn-start-course btn-start-tour"
+              (click)="startPlatformTour()"
+              title="Запустить интерактивный Spotlight-онбординг с подсказками по элементам интерфейса"
             >
-              <app-icon [name]="course.status === 'completed' ? 'rotate-ccw' : 'book-open'" [size]="16"></app-icon>
-              <span>{{ course.status === 'completed' ? 'Пройти повторно' : (course.progress > 0 ? 'Продолжить обучение' : 'Начать обучение') }}</span>
+              <app-icon [name]="course.status === 'completed' ? 'rotate-ccw' : 'sparkles'" [size]="16"></app-icon>
+              <span>{{ course.status === 'completed' ? 'Пройти тур повторно' : 'Начать интерактивный тур' }}</span>
+            </button>
+
+            <button
+              type="button"
+              class="btn-secondary-notes"
+              (click)="startCourse(course)"
+              title="Открыть текстовый конспект и пройти тестирование вручную"
+            >
+              <app-icon name="book-open" [size]="15"></app-icon>
+              <span>Текстовый регламент</span>
             </button>
           </div>
         </div>

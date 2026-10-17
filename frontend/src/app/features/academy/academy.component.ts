@@ -4,6 +4,7 @@ import { FormsModule } from '@angular/forms';
 import { ApiService } from '../../core/services/api.service';
 import { AuthService } from '../../core/services/auth.service';
 import { I18nService } from '../../core/services/i18n.service';
+import { OnboardingTourService } from '../../core/services/onboarding-tour.service';
 import { IconComponent } from '../../shared/components/icon/icon.component';
 import { LoadingComponent } from '../../shared/components/loading/loading.component';
 
@@ -63,6 +64,7 @@ export class AcademyComponent implements OnInit {
   private api = inject(ApiService);
   authService = inject(AuthService);
   i18n = inject(I18nService);
+  tourService = inject(OnboardingTourService);
 
   // Active independent learning track: 'platform' (Часть 1) vs 'job' (Часть 2)
   activeTrack = signal<'platform' | 'job'>('platform');
@@ -154,6 +156,50 @@ export class AcademyComponent implements OnInit {
 
   ngOnInit(): void {
     this.loadData();
+
+    // Listen for Onboarding Tour completion to auto-save 100% progress
+    this.tourService.tourCompleted$.subscribe(() => {
+      const pc = this.platformCourse();
+      if (pc) {
+        this.completePlatformOnboarding(pc.id);
+      } else {
+        this.actionSuccess.set('🎉 Поздравляем! Интерактивный онбординг по платформе успешно завершен на 100%!');
+        setTimeout(() => this.actionSuccess.set(''), 6000);
+      }
+    });
+  }
+
+  startPlatformTour(): void {
+    const role = this.isManager() ? 'manager' : 'employee';
+    this.tourService.startTour(role);
+  }
+
+  completePlatformOnboarding(courseId: number): void {
+    this.api.post(`/courses/${courseId}/progress`, { progress: 100 }).subscribe({
+      next: () => {
+        this.courses.update((list) =>
+          list.map((c) =>
+            c.id === courseId
+              ? { ...c, progress: 100, status: 'completed', score: 100 }
+              : c
+          )
+        );
+        this.actionSuccess.set('🎉 Поздравляем! Интерактивный онбординг по платформе успешно завершен на 100%!');
+        setTimeout(() => this.actionSuccess.set(''), 6000);
+      },
+      error: () => {
+        // Fallback local update
+        this.courses.update((list) =>
+          list.map((c) =>
+            c.id === courseId
+              ? { ...c, progress: 100, status: 'completed', score: 100 }
+              : c
+          )
+        );
+        this.actionSuccess.set('🎉 Поздравляем! Интерактивный онбординг по платформе успешно завершен на 100%!');
+        setTimeout(() => this.actionSuccess.set(''), 6000);
+      },
+    });
   }
 
   loadData(): void {
