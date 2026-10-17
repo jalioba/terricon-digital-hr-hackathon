@@ -59,9 +59,10 @@ CREATE TABLE IF NOT EXISTS tasks (
   description TEXT NOT NULL DEFAULT '',
   department_id INT NOT NULL REFERENCES departments(id),
   created_by INT NOT NULL REFERENCES users(id),
-  assigned_to INT NOT NULL REFERENCES users(id),
+  assigned_to INT REFERENCES users(id),
   due_date DATE,
-  status VARCHAR(20) NOT NULL DEFAULT 'todo' CHECK (status IN ('todo', 'in_progress', 'done')),
+  status VARCHAR(20) NOT NULL DEFAULT 'todo' CHECK (status IN ('todo', 'in_progress', 'review', 'done')),
+  rework_comment TEXT DEFAULT '',
   created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
   updated_at TIMESTAMPTZ NOT NULL DEFAULT now()
 );
