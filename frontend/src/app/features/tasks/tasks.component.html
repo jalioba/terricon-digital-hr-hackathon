@@ -180,7 +180,7 @@
 
   <!-- KANBAN BOARD VIEW -->
   <div class="kanban-view-container" *ngIf="!isLoading() && viewMode() === 'kanban'">
-    <div class="kanban-board">
+    <div class="kanban-board" data-tour="tasks-kanban-board">
       <!-- COLUMN 1: TO DO (К выполнению) -->
       <div class="kanban-column column-todo">
         <div class="column-header">
@@ -236,7 +236,7 @@
               </div>
 
               <!-- Actions Area (click stopPropagation) -->
-              <div class="card-actions" (click)="$event.stopPropagation()">
+              <div class="card-actions" data-tour="task-action-btn" (click)="$event.stopPropagation()">
                 <!-- EMPLOYEE ACTION: Начать задачу -->
                 <button
                   type="button"
@@ -389,7 +389,7 @@
               </div>
 
               <!-- MANAGER ACTIONS: Подтвердить / На перевыполнение -->
-              <div class="manager-review-actions" *ngIf="authService.isManager()" (click)="$event.stopPropagation()">
+              <div class="manager-review-actions" data-tour="task-review-actions" *ngIf="authService.isManager()" (click)="$event.stopPropagation()">
                 <button
                   type="button"
                   class="action-btn action-rework"
@@ -461,12 +461,12 @@
                 <span class="assignee-name">{{ task.assignee_name || 'Не назначен' }}</span>
               </div>
 
-              <!-- Delete / Trash Action -->
-              <div class="card-actions" (click)="$event.stopPropagation()">
+              <!-- Delete / Trash Action (Manager & HR only) -->
+              <div class="card-actions" *ngIf="!authService.isEmployee()" (click)="$event.stopPropagation()">
                 <button
                   type="button"
                   class="action-btn action-trash"
-                  (click)="deleteTask(task)"
+                  (click)="openDeleteModal(task)"
                   title="Отправить выполненное задание в мусорное ведро"
                 >
                   <app-icon name="trash" [size]="12"></app-icon>
@@ -608,12 +608,12 @@
                     </ng-container>
                   </ng-container>
 
-                  <!-- Trash Action for Completed (Done) Tasks -->
+                  <!-- Trash Action for Completed (Done) Tasks (Manager & HR only) -->
                   <button
                     type="button"
                     class="tbl-action-btn action-trash"
-                    *ngIf="task.status === 'done'"
-                    (click)="deleteTask(task)"
+                    *ngIf="!authService.isEmployee() && task.status === 'done'"
+                    (click)="openDeleteModal(task)"
                     title="Отправить выполненное задание в мусорное ведро"
                   >
                     <app-icon name="trash" [size]="12"></app-icon>
@@ -1005,12 +1005,12 @@
               </button>
             </div>
           </ng-container>
-          <!-- Trash Action for Completed (Done) Tasks in Modal -->
+          <!-- Trash Action for Completed (Done) Tasks in Modal (Manager & HR only) -->
           <button
             type="button"
             class="action-btn action-trash btn-lg"
-            *ngIf="task.status === 'done'"
-            (click)="deleteTask(task)"
+            *ngIf="!authService.isEmployee() && task.status === 'done'"
+            (click)="openDeleteModal(task)"
             title="Отправить выполненное задание в мусорное ведро"
           >
             <app-icon name="trash" [size]="14"></app-icon>
@@ -1022,6 +1022,63 @@
       <div class="modal-actions-footer">
         <button type="button" class="btn-cancel" (click)="closeDetailModal()">
           Закрыть
+        </button>
+      </div>
+    </div>
+  </div>
+
+  <!-- ========================================================
+       MODAL: DELETE TASK CONFIRMATION (MANAGER & HR)
+       ======================================================== -->
+  <div class="modal-overlay" *ngIf="isDeleteModalOpen()" (click)="closeDeleteModal()">
+    <div class="modal-card modal-delete-card" (click)="$event.stopPropagation()" *ngIf="taskToDelete() as task">
+      <div class="delete-modal-top">
+        <div class="delete-icon-circle">
+          <app-icon name="trash" [size]="26"></app-icon>
+        </div>
+        <div class="delete-titles">
+          <h2 class="modal-title delete-title">Удаление задачи</h2>
+          <p class="modal-subtitle">
+            Вы уверены, что хотите отправить данную задачу в мусорное ведро?
+          </p>
+        </div>
+        <button type="button" class="btn-close-modal" (click)="closeDeleteModal()" title="Закрыть">
+          <app-icon name="x" [size]="18"></app-icon>
+        </button>
+      </div>
+
+      <div class="delete-task-preview">
+        <div class="preview-meta">
+          <span class="card-dept-tag" *ngIf="task.dept_name_ru">{{ task.dept_name_ru }}</span>
+          <span class="status-pill status-done">Завершено</span>
+        </div>
+        <div class="preview-title">{{ task.title }}</div>
+        <div class="preview-assignee" *ngIf="task.assignee_name">
+          <span class="text-muted">Исполнитель:</span>
+          <strong>{{ task.assignee_name }}</strong>
+        </div>
+      </div>
+
+      <div class="delete-warning-note">
+        <app-icon name="alert-triangle" [size]="16"></app-icon>
+        <span>
+          Задача будет окончательно удалена из системы и архива выполненных заданий.
+        </span>
+      </div>
+
+      <div class="modal-actions-footer delete-footer">
+        <button type="button" class="btn-cancel" (click)="closeDeleteModal()" [disabled]="isDeletingTask()">
+          Отмена
+        </button>
+        <button
+          type="button"
+          class="btn-delete-confirm"
+          (click)="confirmDeleteTask()"
+          [disabled]="isDeletingTask()"
+        >
+          <span class="spinner-sm" *ngIf="isDeletingTask()"></span>
+          <app-icon name="trash" [size]="14" *ngIf="!isDeletingTask()"></app-icon>
+          <span>{{ isDeletingTask() ? 'Удаление...' : 'Да, отправить в корзину' }}</span>
         </button>
       </div>
     </div>

@@ -39,6 +39,7 @@
     <button
       type="button"
       class="track-tab-btn"
+      data-tour="academy-track-platform"
       [class.active]="activeTrack() === 'platform'"
       (click)="switchTrack('platform')"
     >
@@ -57,6 +58,7 @@
     <button
       type="button"
       class="track-tab-btn"
+      data-tour="academy-track-job"
       [class.active]="activeTrack() === 'job'"
       (click)="switchTrack('job')"
     >

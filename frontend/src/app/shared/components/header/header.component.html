@@ -6,7 +6,7 @@
     </a>
 
     <!-- Navigation Bar -->
-    <nav class="header-nav">
+    <nav class="header-nav" data-tour="header-nav">
       <!-- HR Manager Tabs -->
       <ng-container *ngIf="authService.isHr()">
         <a routerLink="/hr/employees" routerLinkActive="active" class="nav-link">
@@ -66,7 +66,7 @@
     </nav>
 
     <!-- Header Actions -->
-    <div class="header-actions">
+    <div class="header-actions" data-tour="header-actions">
       <!-- Role indicator badge and user name -->
       <div class="header-role-badge" *ngIf="authService.currentUser() as user">
         <span class="badge badge-green" *ngIf="user.role === 'hr'">HR-директор</span>
