@@ -1,10 +1,30 @@
 <div class="tasks-page">
+  <!-- Action Toast Banner -->
+  <div class="action-toast-banner" *ngIf="actionToast()">
+    <app-icon name="check-circle" [size]="16"></app-icon>
+    <span>{{ actionToast() }}</span>
+  </div>
+
   <!-- Top Navigation Bar (Bitrix24 Inspired Toolbar) -->
   <div class="tasks-top-bar">
     <div class="bar-left">
       <div class="page-title-group">
         <h1 class="page-title">Задачи</h1>
         <span class="total-badge">{{ totalCount() }}</span>
+      </div>
+
+      <!-- Role Context Badge -->
+      <div class="role-scope-badge" *ngIf="authService.isEmployee()">
+        <app-icon name="user" [size]="14"></app-icon>
+        <span>Мои персональные задачи</span>
+      </div>
+      <div class="role-scope-badge manager-scope" *ngIf="authService.isManager()">
+        <app-icon name="briefcase" [size]="14"></app-icon>
+        <span>Подразделение: {{ managerDepartmentName() }}</span>
+      </div>
+      <div class="role-scope-badge hr-scope" *ngIf="authService.isHr()">
+        <app-icon name="shield" [size]="14"></app-icon>
+        <span>Диспетчеризация задач по отделам</span>
       </div>
 
       <!-- View Switcher (Kanban / List Table) -->
@@ -34,6 +54,21 @@
 
     <!-- Actions Group -->
     <div class="bar-right">
+      <!-- HR Department Filter Dropdown in Top Bar -->
+      <div class="dept-filter-wrap" *ngIf="authService.isHr()">
+        <select
+          class="select-dept"
+          [ngModel]="selectedDepartment()"
+          (ngModelChange)="onDepartmentChange($event)"
+          title="Фильтр по отделу"
+        >
+          <option value="all">Все отделы компании</option>
+          <option *ngFor="let dept of departments()" [value]="dept.id">
+            {{ i18n.currentLang() === 'ru' ? dept.name_ru : dept.name_kz }}
+          </option>
+        </select>
+      </div>
+
       <button
         type="button"
         class="btn-refresh"
@@ -46,18 +81,20 @@
         <span>{{ isLoading() ? 'Синхронизация...' : 'Обновить' }}</span>
       </button>
 
+      <!-- Only HR and Manager can create tasks (Employee cannot) -->
       <button
         type="button"
         class="btn-create-task"
-        (click)="openCreateModal('todo')"
+        *ngIf="!authService.isEmployee()"
+        (click)="openCreateModal()"
       >
         <app-icon name="plus" [size]="16"></app-icon>
-        <span>Создать задачу</span>
+        <span>{{ authService.isHr() ? 'Поставить задачу отделу' : 'Создать задачу' }}</span>
       </button>
     </div>
   </div>
 
-  <!-- Filters & Search Toolbar (Bitrix24 Stage Chips) -->
+  <!-- Filters & Search Toolbar (Stage Chips) -->
   <div class="tasks-filters-bar">
     <div class="filter-chips">
       <button
@@ -66,8 +103,18 @@
         [class.active]="activeFilter() === 'all'"
         (click)="activeFilter.set('all')"
       >
-        <span>Все задачи</span>
+        <span>Все</span>
         <span class="chip-count">{{ totalCount() }}</span>
+      </button>
+
+      <button
+        type="button"
+        class="chip-btn"
+        [class.active]="activeFilter() === 'todo'"
+        (click)="activeFilter.set('todo')"
+      >
+        <span>К выполнению</span>
+        <span class="chip-count">{{ todoTasks().length }}</span>
       </button>
 
       <button
@@ -83,98 +130,59 @@
       <button
         type="button"
         class="chip-btn"
-        [class.active]="activeFilter() === 'my'"
-        (click)="activeFilter.set('my')"
+        [class.active]="activeFilter() === 'review'"
+        (click)="activeFilter.set('review')"
       >
-        <span>Мои задачи</span>
-        <span class="chip-count chip-green">{{ myTasksCount() }}</span>
+        <span>На проверке</span>
+        <span class="chip-count chip-review">{{ reviewTasks().length }}</span>
       </button>
 
       <button
         type="button"
         class="chip-btn"
-        [class.active]="activeFilter() === 'delegated'"
-        (click)="activeFilter.set('delegated')"
+        [class.active]="activeFilter() === 'done'"
+        (click)="activeFilter.set('done')"
       >
-        <span>Поручил</span>
-        <span class="chip-count">{{ delegatedCount() }}</span>
+        <span>Завершено</span>
+        <span class="chip-count chip-green">{{ doneTasks().length }}</span>
       </button>
 
+      <!-- Manager filter: Unassigned tasks -->
       <button
         type="button"
-        class="chip-btn chip-danger"
-        [class.active]="activeFilter() === 'overdue'"
-        (click)="activeFilter.set('overdue')"
-        *ngIf="overdueCount() > 0"
+        class="chip-btn chip-warn"
+        *ngIf="authService.isManager() && unassignedCount() > 0"
+        [class.active]="activeFilter() === 'unassigned'"
+        (click)="activeFilter.set('unassigned')"
       >
-        <span>Просроченные</span>
-        <span class="chip-count chip-red">{{ overdueCount() }}</span>
+        <span>Без исполнителя</span>
+        <span class="chip-count chip-amber">{{ unassignedCount() }}</span>
       </button>
     </div>
 
-    <!-- Search & Department Filter -->
-    <div class="search-dept-group">
-      <!-- Search -->
-      <div class="search-box">
-        <span class="search-icon"><app-icon name="search" [size]="15"></app-icon></span>
-        <input
-          type="text"
-          [ngModel]="searchQuery()"
-          (ngModelChange)="searchQuery.set($event)"
-          placeholder="Поиск по названию или сотруднику..."
-        />
-        <button
-          type="button"
-          class="clear-search-btn"
-          *ngIf="searchQuery()"
-          (click)="searchQuery.set('')"
-          title="Очистить поиск"
-        >
-          <app-icon name="x" [size]="13"></app-icon>
-        </button>
-      </div>
-
-      <!-- Department Filter for HR -->
-      <select
-        *ngIf="authService.isHr()"
-        class="dept-select"
-        [ngModel]="selectedDepartment()"
-        (ngModelChange)="onDepartmentChange($event)"
-      >
-        <option value="all">Все отделы компании</option>
-        <option *ngFor="let dept of departments()" [value]="dept.id">
-          {{ dept.name_ru }}
-        </option>
-      </select>
-
-      <!-- Department Locked Badge for Manager -->
-      <div *ngIf="!authService.isHr()" class="dept-badge-pill">
-        <app-icon name="shield" [size]="14"></app-icon>
-        <span>{{ managerDepartmentName() }}</span>
-      </div>
+    <div class="search-wrap">
+      <app-icon name="search" [size]="15" class="search-icon"></app-icon>
+      <input
+        type="text"
+        class="search-input"
+        placeholder="Поиск по названию, исполнителю..."
+        [ngModel]="searchQuery()"
+        (ngModelChange)="searchQuery.set($event)"
+      />
     </div>
   </div>
 
   <!-- Loading State -->
-  <div class="loading-state-wrapper" *ngIf="isLoading()">
-    <app-loading
-      type="skeleton-cards"
-      [rows]="3"
-      text="Загрузка задач и канбан-доски..."
-    ></app-loading>
-  </div>
+  <app-loading
+    *ngIf="isLoading()"
+    [text]="'Загрузка списка рабочих задач...'"
+  ></app-loading>
 
   <!-- KANBAN BOARD VIEW -->
-  <div class="kanban-board-container" *ngIf="!isLoading() && viewMode() === 'kanban'">
+  <div class="kanban-view-container" *ngIf="!isLoading() && viewMode() === 'kanban'">
     <div class="kanban-board">
       <!-- COLUMN 1: TO DO (К выполнению) -->
-      <div
-        class="kanban-column column-todo"
-        [class.drag-over]="dragOverColumn() === 'todo'"
-        (dragover)="onDragOver($event, 'todo')"
-        (dragleave)="onDragLeave($event)"
-        (drop)="onDrop($event, 'todo')"
-      >
+      <div class="kanban-column column-todo">
         <div class="column-header">
           <div class="column-header-top">
             <div class="column-title-wrap">
@@ -183,26 +191,15 @@
             </div>
             <span class="stage-count">{{ todoTasks().length }}</span>
           </div>
-          <button
-            type="button"
-            class="btn-quick-add"
-            (click)="openCreateModal('todo')"
-            title="Быстро создать задачу в этот статус"
-          >
-            <app-icon name="plus" [size]="14"></app-icon>
-            <span>Быстрая задача</span>
-          </button>
         </div>
 
         <div class="column-cards-list">
           <div
             class="task-card"
             *ngFor="let task of todoTasks()"
-            draggable="true"
-            (dragstart)="onDragStart($event, task)"
             (click)="viewTaskDetails(task)"
           >
-            <!-- Card Header: Department & Due date -->
+            <!-- Card Header: Dept tag & Due Date -->
             <div class="card-meta-row">
               <span class="card-dept-tag" *ngIf="task.dept_name_ru">{{ task.dept_name_ru }}</span>
               <span
@@ -216,33 +213,57 @@
               </span>
             </div>
 
-            <!-- Card Title -->
+            <!-- Card Title & Desc -->
             <div class="card-title">{{ task.title }}</div>
             <div class="card-desc" *ngIf="task.description">{{ task.description }}</div>
 
-            <!-- Card Footer: Assignee & Creator -->
+            <!-- Unassigned Warning for Manager -->
+            <div class="unassigned-banner" *ngIf="!task.assigned_to">
+              <app-icon name="alert-triangle" [size]="13"></app-icon>
+              <span>Исполнитель не назначен</span>
+            </div>
+
+            <!-- Card Footer: Assignee & Action Buttons -->
             <div class="card-footer">
-              <div class="assignee-wrap" [title]="'Исполнитель: ' + (task.assignee_name || 'Не назначен')">
+              <div class="assignee-wrap" *ngIf="task.assigned_to" [title]="'Исполнитель: ' + (task.assignee_name || 'Не назначен')">
                 <span class="avatar-circle">{{ getInitials(task.assignee_name) }}</span>
-                <span class="assignee-name">{{ task.assignee_name || 'Не назначен' }}</span>
+                <span class="assignee-name">{{ task.assignee_name }}</span>
               </div>
 
-              <!-- Quick Move Button -->
+              <div class="assignee-wrap unassigned-wrap" *ngIf="!task.assigned_to">
+                <span class="avatar-circle unassigned">?</span>
+                <span class="assignee-name text-muted">Не назначен</span>
+              </div>
+
+              <!-- Actions Area (click stopPropagation) -->
               <div class="card-actions" (click)="$event.stopPropagation()">
+                <!-- EMPLOYEE ACTION: Начать задачу -->
                 <button
                   type="button"
-                  class="action-move-btn"
-                  (click)="moveTaskStatus(task, 'in_progress')"
-                  title="Взять в работу"
+                  class="action-btn action-start"
+                  *ngIf="authService.isEmployee()"
+                  (click)="startTask(task)"
+                  title="Начать выполнение задачи"
                 >
-                  <span>В работу</span>
-                  <app-icon name="chevron-right" [size]="13"></app-icon>
+                  <app-icon name="play" [size]="12"></app-icon>
+                  <span>Начать</span>
+                </button>
+
+                <!-- MANAGER ACTION: Выбрать/Назначить работника -->
+                <button
+                  type="button"
+                  class="action-btn action-assign"
+                  *ngIf="authService.isManager()"
+                  (click)="openAssignModal(task)"
+                  title="Выбрать работника из своего отдела"
+                >
+                  <app-icon name="user" [size]="12"></app-icon>
+                  <span>{{ task.assigned_to ? 'Сменить' : 'Выбрать работника' }}</span>
                 </button>
               </div>
             </div>
           </div>
 
-          <!-- Empty state for column -->
           <div class="column-empty" *ngIf="todoTasks().length === 0">
             <span>Нет задач к выполнению</span>
           </div>
@@ -250,13 +271,7 @@
       </div>
 
       <!-- COLUMN 2: IN PROGRESS (В работе) -->
-      <div
-        class="kanban-column column-progress"
-        [class.drag-over]="dragOverColumn() === 'in_progress'"
-        (dragover)="onDragOver($event, 'in_progress')"
-        (dragleave)="onDragLeave($event)"
-        (drop)="onDrop($event, 'in_progress')"
-      >
+      <div class="kanban-column column-progress">
         <div class="column-header">
           <div class="column-header-top">
             <div class="column-title-wrap">
@@ -265,26 +280,15 @@
             </div>
             <span class="stage-count">{{ inProgressTasks().length }}</span>
           </div>
-          <button
-            type="button"
-            class="btn-quick-add"
-            (click)="openCreateModal('in_progress')"
-            title="Быстро создать задачу в этот статус"
-          >
-            <app-icon name="plus" [size]="14"></app-icon>
-            <span>Быстрая задача</span>
-          </button>
         </div>
 
         <div class="column-cards-list">
           <div
             class="task-card"
             *ngFor="let task of inProgressTasks()"
-            draggable="true"
-            (dragstart)="onDragStart($event, task)"
             (click)="viewTaskDetails(task)"
           >
-            <!-- Card Header: Department & Due date -->
+            <!-- Card Header: Dept tag & Due Date -->
             <div class="card-meta-row">
               <span class="card-dept-tag" *ngIf="task.dept_name_ru">{{ task.dept_name_ru }}</span>
               <span
@@ -298,55 +302,130 @@
               </span>
             </div>
 
-            <!-- Card Title -->
+            <!-- Card Title & Desc -->
             <div class="card-title">{{ task.title }}</div>
             <div class="card-desc" *ngIf="task.description">{{ task.description }}</div>
 
-            <!-- Card Footer: Assignee & Move Buttons -->
+            <!-- Rework comment alert banner if sent back by manager -->
+            <div class="rework-alert-banner" *ngIf="task.rework_comment">
+              <app-icon name="rotate-ccw" [size]="13"></app-icon>
+              <div class="rework-text">
+                <strong>На перевыполнении:</strong> {{ task.rework_comment }}
+              </div>
+            </div>
+
+            <!-- Card Footer: Assignee & Action Buttons -->
             <div class="card-footer">
               <div class="assignee-wrap" [title]="'Исполнитель: ' + (task.assignee_name || 'Не назначен')">
-                <span class="avatar-circle">{{ getInitials(task.assignee_name) }}</span>
+                <span class="avatar-circle progress-circle">{{ getInitials(task.assignee_name) }}</span>
                 <span class="assignee-name">{{ task.assignee_name || 'Не назначен' }}</span>
               </div>
 
-              <!-- Quick Move Actions -->
+              <!-- Actions Area -->
               <div class="card-actions" (click)="$event.stopPropagation()">
+                <!-- EMPLOYEE ACTION: Задача готова -> отправить руководителю на проверку -->
                 <button
                   type="button"
-                  class="action-move-btn back"
-                  (click)="moveTaskStatus(task, 'todo')"
-                  title="Вернуть в 'К выполнению'"
+                  class="action-btn action-ready"
+                  *ngIf="authService.isEmployee()"
+                  (click)="submitTaskToManager(task)"
+                  title="Отправить выполненную задачу на проверку руководителю"
                 >
-                  <app-icon name="chevron-left" [size]="13"></app-icon>
-                </button>
-                <button
-                  type="button"
-                  class="action-move-btn success"
-                  (click)="moveTaskStatus(task, 'done')"
-                  title="Завершить задачу"
-                >
-                  <app-icon name="check" [size]="13"></app-icon>
-                  <span>Готово</span>
+                  <app-icon name="check" [size]="12"></app-icon>
+                  <span>Задача готова</span>
                 </button>
               </div>
             </div>
           </div>
 
-          <!-- Empty state for column -->
           <div class="column-empty" *ngIf="inProgressTasks().length === 0">
             <span>Нет задач в работе</span>
           </div>
         </div>
       </div>
 
-      <!-- COLUMN 3: DONE (Завершено) -->
-      <div
-        class="kanban-column column-done"
-        [class.drag-over]="dragOverColumn() === 'done'"
-        (dragover)="onDragOver($event, 'done')"
-        (dragleave)="onDragLeave($event)"
-        (drop)="onDrop($event, 'done')"
-      >
+      <!-- COLUMN 3: REVIEW (На проверке) -->
+      <div class="kanban-column column-review">
+        <div class="column-header">
+          <div class="column-header-top">
+            <div class="column-title-wrap">
+              <span class="stage-color-indicator review-indicator"></span>
+              <h2 class="column-title">На проверке</h2>
+            </div>
+            <span class="stage-count review-stage-count">{{ reviewTasks().length }}</span>
+          </div>
+        </div>
+
+        <div class="column-cards-list">
+          <div
+            class="task-card card-review"
+            *ngFor="let task of reviewTasks()"
+            (click)="viewTaskDetails(task)"
+          >
+            <!-- Card Header: Dept tag & Status badge -->
+            <div class="card-meta-row">
+              <span class="card-dept-tag" *ngIf="task.dept_name_ru">{{ task.dept_name_ru }}</span>
+              <span class="badge-review-wait">
+                <app-icon name="clock" [size]="11"></app-icon>
+                <span>Ожидает решения</span>
+              </span>
+            </div>
+
+            <!-- Card Title & Desc -->
+            <div class="card-title">{{ task.title }}</div>
+            <div class="card-desc" *ngIf="task.description">{{ task.description }}</div>
+
+            <!-- Submitted Notice -->
+            <div class="submitted-notice" *ngIf="task.assignee_name">
+              Выполнено сотрудником: <strong>{{ task.assignee_name }}</strong>
+            </div>
+
+            <!-- Card Footer: Decisions for Manager / Status for Employee -->
+            <div class="card-footer card-footer-review">
+              <!-- Employee view: waiting badge -->
+              <div class="review-status-pill" *ngIf="authService.isEmployee()">
+                <app-icon name="clock" [size]="12"></app-icon>
+                <span>На проверке у руководителя</span>
+              </div>
+
+              <!-- MANAGER ACTIONS: Подтвердить / На перевыполнение -->
+              <div class="manager-review-actions" *ngIf="authService.isManager()" (click)="$event.stopPropagation()">
+                <button
+                  type="button"
+                  class="action-btn action-rework"
+                  (click)="openReworkModal(task)"
+                  title="Отправить задачу на перевыполнение с комментарием"
+                >
+                  <app-icon name="rotate-ccw" [size]="12"></app-icon>
+                  <span>На перевыполнение</span>
+                </button>
+
+                <button
+                  type="button"
+                  class="action-btn action-approve"
+                  (click)="approveTask(task)"
+                  title="Подтвердить успешное выполнение задачи"
+                >
+                  <app-icon name="check" [size]="12"></app-icon>
+                  <span>Подтвердить</span>
+                </button>
+              </div>
+
+              <!-- HR view: informative label -->
+              <div class="review-status-pill" *ngIf="authService.isHr()">
+                <span>На ревью у руководителя</span>
+              </div>
+            </div>
+          </div>
+
+          <div class="column-empty" *ngIf="reviewTasks().length === 0">
+            <span>Нет задач на проверке</span>
+          </div>
+        </div>
+      </div>
+
+      <!-- COLUMN 4: DONE (Завершено) -->
+      <div class="kanban-column column-done">
         <div class="column-header">
           <div class="column-header-top">
             <div class="column-title-wrap">
@@ -361,44 +440,29 @@
           <div
             class="task-card card-completed"
             *ngFor="let task of doneTasks()"
-            draggable="true"
-            (dragstart)="onDragStart($event, task)"
             (click)="viewTaskDetails(task)"
           >
-            <!-- Card Header: Department & Completed check -->
+            <!-- Card Header: Dept tag & Completed check -->
             <div class="card-meta-row">
               <span class="card-dept-tag" *ngIf="task.dept_name_ru">{{ task.dept_name_ru }}</span>
               <span class="completed-badge">
                 <app-icon name="check-circle" [size]="13"></app-icon>
-                <span>Выполнено</span>
+                <span>Подтверждено</span>
               </span>
             </div>
 
             <!-- Card Title -->
             <div class="card-title strike">{{ task.title }}</div>
 
-            <!-- Card Footer: Assignee & Reopen Action -->
+            <!-- Card Footer: Assignee -->
             <div class="card-footer">
               <div class="assignee-wrap" [title]="'Исполнитель: ' + (task.assignee_name || 'Не назначен')">
                 <span class="avatar-circle done">{{ getInitials(task.assignee_name) }}</span>
                 <span class="assignee-name">{{ task.assignee_name || 'Не назначен' }}</span>
               </div>
-
-              <!-- Reopen Button -->
-              <div class="card-actions" (click)="$event.stopPropagation()">
-                <button
-                  type="button"
-                  class="action-move-btn back"
-                  (click)="moveTaskStatus(task, 'in_progress')"
-                  title="Возобновить в работу"
-                >
-                  <span>Вернуть</span>
-                </button>
-              </div>
             </div>
           </div>
 
-          <!-- Empty state for column -->
           <div class="column-empty" *ngIf="doneTasks().length === 0">
             <span>Завершенных задач пока нет</span>
           </div>
@@ -418,9 +482,8 @@
               <th>Название задачи</th>
               <th>Подразделение</th>
               <th>Исполнитель</th>
-              <th>Постановщик</th>
               <th>Срок</th>
-              <th style="width: 140px; text-align: right;">Действия</th>
+              <th style="width: 220px; text-align: right;">Действия</th>
             </tr>
           </thead>
           <tbody>
@@ -433,6 +496,9 @@
                 <span class="status-pill status-progress" *ngIf="task.status === 'in_progress'">
                   В работе
                 </span>
+                <span class="status-pill status-review" *ngIf="task.status === 'review'">
+                  На проверке
+                </span>
                 <span class="status-pill status-done" *ngIf="task.status === 'done'">
                   Завершено
                 </span>
@@ -442,6 +508,9 @@
               <td>
                 <div class="table-task-title" [class.strike]="task.status === 'done'">{{ task.title }}</div>
                 <div class="table-task-desc" *ngIf="task.description">{{ task.description }}</div>
+                <div class="table-rework-note" *ngIf="task.rework_comment">
+                  Замечания: {{ task.rework_comment }}
+                </div>
               </td>
 
               <!-- Department -->
@@ -451,15 +520,14 @@
 
               <!-- Assignee -->
               <td>
-                <div class="table-user-cell">
+                <div class="table-user-cell" *ngIf="task.assigned_to">
                   <span class="avatar-circle avatar-sm">{{ getInitials(task.assignee_name) }}</span>
-                  <span>{{ task.assignee_name || 'Не назначен' }}</span>
+                  <span>{{ task.assignee_name }}</span>
                 </div>
-              </td>
-
-              <!-- Creator -->
-              <td>
-                <span class="table-creator">{{ task.creator_name || 'Система' }}</span>
+                <div class="table-user-cell text-muted" *ngIf="!task.assigned_to">
+                  <span class="avatar-circle avatar-sm unassigned">?</span>
+                  <span>Не назначен</span>
+                </div>
               </td>
 
               <!-- Due Date -->
@@ -473,42 +541,65 @@
                 </span>
               </td>
 
-              <!-- Action buttons -->
+              <!-- Action buttons in table row -->
               <td style="text-align: right;" (click)="$event.stopPropagation()">
                 <div class="table-actions">
-                  <button
-                    type="button"
-                    class="tbl-action-btn"
-                    *ngIf="task.status === 'todo'"
-                    (click)="moveTaskStatus(task, 'in_progress')"
-                    title="Взять в работу"
-                  >
-                    В работу
-                  </button>
-                  <button
-                    type="button"
-                    class="tbl-action-btn success"
-                    *ngIf="task.status === 'in_progress'"
-                    (click)="moveTaskStatus(task, 'done')"
-                    title="Завершить"
-                  >
-                    Готово
-                  </button>
-                  <button
-                    type="button"
-                    class="tbl-action-btn neutral"
-                    *ngIf="task.status === 'done'"
-                    (click)="moveTaskStatus(task, 'in_progress')"
-                    title="Вернуть в работу"
-                  >
-                    Вернуть
-                  </button>
+                  <!-- Employee Actions -->
+                  <ng-container *ngIf="authService.isEmployee()">
+                    <button
+                      type="button"
+                      class="tbl-action-btn action-start"
+                      *ngIf="task.status === 'todo'"
+                      (click)="startTask(task)"
+                    >
+                      Начать
+                    </button>
+                    <button
+                      type="button"
+                      class="tbl-action-btn action-ready"
+                      *ngIf="task.status === 'in_progress'"
+                      (click)="submitTaskToManager(task)"
+                    >
+                      Готово
+                    </button>
+                    <span class="text-muted font-xs" *ngIf="task.status === 'review'">
+                      На проверке
+                    </span>
+                  </ng-container>
+
+                  <!-- Manager Actions -->
+                  <ng-container *ngIf="authService.isManager()">
+                    <button
+                      type="button"
+                      class="tbl-action-btn action-assign"
+                      *ngIf="task.status === 'todo'"
+                      (click)="openAssignModal(task)"
+                    >
+                      {{ task.assigned_to ? 'Сменить' : 'Назначить' }}
+                    </button>
+                    <ng-container *ngIf="task.status === 'review'">
+                      <button
+                        type="button"
+                        class="tbl-action-btn action-rework"
+                        (click)="openReworkModal(task)"
+                      >
+                        Доработка
+                      </button>
+                      <button
+                        type="button"
+                        class="tbl-action-btn action-approve"
+                        (click)="approveTask(task)"
+                      >
+                        Принять
+                      </button>
+                    </ng-container>
+                  </ng-container>
                 </div>
               </td>
             </tr>
 
             <tr *ngIf="filteredTasks().length === 0">
-              <td colspan="7" class="empty-table-cell">
+              <td colspan="6" class="empty-table-cell">
                 <span>Задачи по выбранным фильтрам не найдены</span>
               </td>
             </tr>
@@ -518,13 +609,23 @@
     </div>
   </div>
 
-  <!-- CREATE TASK MODAL (Bitrix24 Style) -->
+  <!-- ========================================================
+       MODAL: CREATE TASK (HR & MANAGER)
+       ======================================================== -->
   <div class="modal-overlay" *ngIf="isModalOpen()" (click)="closeModal()">
     <div class="modal-card" (click)="$event.stopPropagation()">
       <div class="modal-header">
         <div class="modal-titles">
-          <h2 class="modal-title">Новая задача</h2>
-          <p class="modal-subtitle">Постановка рабочей задачи сотруднику компании JanaPost</p>
+          <h2 class="modal-title">
+            {{ authService.isHr() ? 'Постановка задачи отделу' : 'Новая задача подразделения' }}
+          </h2>
+          <p class="modal-subtitle">
+            {{
+              authService.isHr()
+                ? 'Задача поступит руководителю выбранного отдела для распределения работникам.'
+                : 'Постановка рабочей задачи сотрудникам вашего подразделения.'
+            }}
+          </p>
         </div>
         <button type="button" class="btn-close-modal" (click)="closeModal()" title="Закрыть">
           <app-icon name="x" [size]="18"></app-icon>
@@ -539,6 +640,24 @@
 
       <!-- Form Body -->
       <form (ngSubmit)="submitCreateTask()" class="modal-form">
+        <!-- HR: Department Selection -->
+        <div class="form-field" *ngIf="authService.isHr()">
+          <label for="taskDept">Отдел назначения (Подразделение) *</label>
+          <select
+            id="taskDept"
+            name="taskDept"
+            [(ngModel)]="newTask.department_id"
+            required
+          >
+            <option *ngFor="let dept of departments()" [ngValue]="dept.id">
+              {{ i18n.currentLang() === 'ru' ? dept.name_ru : dept.name_kz }}
+            </option>
+          </select>
+          <span class="field-hint">
+            Руководитель данного отдела получит уведомление и распределит задачу конкретному работнику.
+          </span>
+        </div>
+
         <!-- Task Title -->
         <div class="form-field">
           <label for="taskTitle">Название задачи *</label>
@@ -555,31 +674,33 @@
 
         <!-- Task Description -->
         <div class="form-field">
-          <label for="taskDesc">Описание и подробности задачи</label>
+          <label for="taskDesc">Описание и регламент задачи</label>
           <textarea
             id="taskDesc"
             name="taskDesc"
             rows="3"
             [(ngModel)]="newTask.description"
-            placeholder="Дополнительные детали, требования, примечания..."
+            placeholder="Детали выполнения, требования, ссылки..."
           ></textarea>
         </div>
 
         <div class="form-grid-2">
-          <!-- Assignee -->
-          <div class="form-field">
-            <label for="taskAssignee">Исполнитель *</label>
+          <!-- Manager: Assignee Selection (Only from manager's department) -->
+          <div class="form-field" *ngIf="authService.isManager()">
+            <label for="taskAssignee">Работник отдела</label>
             <select
               id="taskAssignee"
               name="taskAssignee"
               [(ngModel)]="newTask.assignee_id"
-              required
             >
-              <option [ngValue]="0" disabled>Выберите ответственного...</option>
-              <option *ngFor="let member of teamMembers()" [ngValue]="member.id">
-                {{ member.full_name }} ({{ member.position }})
+              <option [ngValue]="null">Без назначения (назначить позже)</option>
+              <option *ngFor="let worker of departmentEmployees()" [ngValue]="worker.id">
+                {{ worker.full_name }} ({{ worker.position }})
               </option>
             </select>
+            <span class="field-hint" *ngIf="departmentEmployees().length === 0">
+              В вашем отделе пока нет работников.
+            </span>
           </div>
 
           <!-- Due Date -->
@@ -602,17 +723,139 @@
           <button
             type="submit"
             class="btn-submit-task"
-            [disabled]="isSubmitting() || !newTask.title.trim() || !newTask.assignee_id"
+            [disabled]="isSubmitting() || !newTask.title.trim()"
           >
             <span class="spinner-sm" *ngIf="isSubmitting()"></span>
-            <span *ngIf="!isSubmitting()">Поставить задачу</span>
+            <span *ngIf="!isSubmitting()">
+              {{ authService.isHr() ? 'Отправить в отдел' : 'Создать задачу' }}
+            </span>
           </button>
         </div>
       </form>
     </div>
   </div>
 
-  <!-- TASK DETAILS MODAL -->
+  <!-- ========================================================
+       MODAL: ASSIGN WORKER (MANAGER ONLY)
+       ======================================================== -->
+  <div class="modal-overlay" *ngIf="isAssignModalOpen()" (click)="closeAssignModal()">
+    <div class="modal-card modal-assign-card" (click)="$event.stopPropagation()" *ngIf="taskToAssign() as task">
+      <div class="modal-header">
+        <div class="modal-titles">
+          <h2 class="modal-title">Назначить работника отдела</h2>
+          <p class="modal-subtitle">
+            Задача: <strong>{{ task.title }}</strong>
+          </p>
+        </div>
+        <button type="button" class="btn-close-modal" (click)="closeAssignModal()" title="Закрыть">
+          <app-icon name="x" [size]="18"></app-icon>
+        </button>
+      </div>
+
+      <div class="modal-error-alert" *ngIf="assignModalError()">
+        <app-icon name="alert-triangle" [size]="16"></app-icon>
+        <span>{{ assignModalError() }}</span>
+      </div>
+
+      <div class="modal-form">
+        <div class="form-field">
+          <label for="assignWorkerSelect">
+            Работник вашего отдела ({{ managerDepartmentName() }}) *
+          </label>
+          <select
+            id="assignWorkerSelect"
+            name="assignWorkerSelect"
+            [ngModel]="selectedAssigneeId()"
+            (ngModelChange)="selectedAssigneeId.set($event)"
+          >
+            <option [ngValue]="null" disabled>Выберите работника из своего отдела...</option>
+            <option *ngFor="let worker of departmentEmployees()" [ngValue]="worker.id">
+              {{ worker.full_name }} — {{ worker.position }}
+            </option>
+          </select>
+          <span class="field-hint">
+            После назначения работник получит уведомление и задача отобразится в его вкладке «Мои задачи».
+          </span>
+        </div>
+
+        <div class="modal-actions-footer">
+          <button type="button" class="btn-cancel" (click)="closeAssignModal()">
+            Отмена
+          </button>
+          <button
+            type="button"
+            class="btn-submit-task"
+            [disabled]="isSubmitting() || !selectedAssigneeId()"
+            (click)="submitAssignWorker()"
+          >
+            <span class="spinner-sm" *ngIf="isSubmitting()"></span>
+            <span *ngIf="!isSubmitting()">Назначить исполнителя</span>
+          </button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ========================================================
+       MODAL: REWORK TASK (MANAGER ONLY)
+       ======================================================== -->
+  <div class="modal-overlay" *ngIf="isReworkModalOpen()" (click)="closeReworkModal()">
+    <div class="modal-card modal-rework-card" (click)="$event.stopPropagation()" *ngIf="taskForRework() as task">
+      <div class="modal-header">
+        <div class="modal-titles">
+          <h2 class="modal-title">Отправить на перевыполнение</h2>
+          <p class="modal-subtitle">
+            Исполнитель: <strong>{{ task.assignee_name }}</strong> ({{ task.title }})
+          </p>
+        </div>
+        <button type="button" class="btn-close-modal" (click)="closeReworkModal()" title="Закрыть">
+          <app-icon name="x" [size]="18"></app-icon>
+        </button>
+      </div>
+
+      <div class="modal-error-alert" *ngIf="reworkModalError()">
+        <app-icon name="alert-triangle" [size]="16"></app-icon>
+        <span>{{ reworkModalError() }}</span>
+      </div>
+
+      <div class="modal-form">
+        <div class="form-field">
+          <label for="reworkNotes">Замечания руководителя к выполнению *</label>
+          <textarea
+            id="reworkNotes"
+            rows="4"
+            [ngModel]="reworkComment()"
+            (ngModelChange)="reworkComment.set($event)"
+            placeholder="Укажите, что именно нужно исправить или переделать..."
+            autofocus
+            required
+          ></textarea>
+          <span class="field-hint">
+            Работник получит эти замечания в уведомлении и увидит их в карточке задачи.
+          </span>
+        </div>
+
+        <div class="modal-actions-footer">
+          <button type="button" class="btn-cancel" (click)="closeReworkModal()">
+            Отмена
+          </button>
+          <button
+            type="button"
+            class="btn-rework-confirm"
+            [disabled]="isSubmitting() || !reworkComment().trim()"
+            (click)="submitRework()"
+          >
+            <span class="spinner-sm" *ngIf="isSubmitting()"></span>
+            <span *ngIf="!isSubmitting()">Вернуть на перевыполнение</span>
+          </button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ========================================================
+       MODAL: TASK DETAILS
+       ======================================================== -->
   <div class="modal-overlay" *ngIf="isDetailModalOpen()" (click)="closeDetailModal()">
     <div class="modal-card modal-detail-card" (click)="$event.stopPropagation()" *ngIf="selectedTask() as task">
       <div class="modal-header">
@@ -620,6 +863,7 @@
           <div class="detail-status-row">
             <span class="status-pill status-todo" *ngIf="task.status === 'todo'">К выполнению</span>
             <span class="status-pill status-progress" *ngIf="task.status === 'in_progress'">В работе</span>
+            <span class="status-pill status-review" *ngIf="task.status === 'review'">На проверке</span>
             <span class="status-pill status-done" *ngIf="task.status === 'done'">Завершено</span>
             <span class="card-dept-tag" *ngIf="task.dept_name_ru">{{ task.dept_name_ru }}</span>
           </div>
@@ -636,18 +880,28 @@
           <div class="section-content">{{ task.description }}</div>
         </div>
 
+        <div class="rework-alert-banner" *ngIf="task.rework_comment">
+          <app-icon name="rotate-ccw" [size]="15"></app-icon>
+          <div class="rework-text">
+            <strong>Замечания руководителя:</strong> {{ task.rework_comment }}
+          </div>
+        </div>
+
         <div class="detail-grid">
           <div class="detail-info-item">
             <span class="info-label">Ответственный (Исполнитель)</span>
-            <div class="info-user-val">
+            <div class="info-user-val" *ngIf="task.assigned_to">
               <span class="avatar-circle">{{ getInitials(task.assignee_name) }}</span>
-              <span class="info-user-name">{{ task.assignee_name || 'Не назначен' }}</span>
+              <span class="info-user-name">{{ task.assignee_name }}</span>
+            </div>
+            <div class="info-val-text text-muted" *ngIf="!task.assigned_to">
+              Исполнитель еще не назначен
             </div>
           </div>
 
           <div class="detail-info-item">
             <span class="info-label">Постановщик задачи</span>
-            <div class="info-val-text">{{ task.creator_name || 'Система' }}</div>
+            <div class="info-val-text">{{ task.creator_name || 'HR-дирекция' }}</div>
           </div>
 
           <div class="detail-info-item">
@@ -668,35 +922,64 @@
           </div>
         </div>
 
-        <!-- Stage advancement action bar inside details -->
-        <div class="stage-control-bar">
-          <span class="stage-bar-title">Переместить на этап:</span>
-          <div class="stage-buttons-group">
+        <!-- Role Action Bar inside Details Modal -->
+        <div class="detail-action-bar">
+          <!-- Employee actions -->
+          <ng-container *ngIf="authService.isEmployee()">
             <button
               type="button"
-              class="stage-move-pill"
-              [class.active]="task.status === 'todo'"
-              (click)="moveTaskStatus(task, 'todo')"
+              class="action-btn action-start btn-lg"
+              *ngIf="task.status === 'todo'"
+              (click)="startTask(task); closeDetailModal()"
             >
-              К выполнению
+              <app-icon name="play" [size]="14"></app-icon>
+              <span>Взять задачу в работу</span>
             </button>
             <button
               type="button"
-              class="stage-move-pill progress"
-              [class.active]="task.status === 'in_progress'"
-              (click)="moveTaskStatus(task, 'in_progress')"
+              class="action-btn action-ready btn-lg"
+              *ngIf="task.status === 'in_progress'"
+              (click)="submitTaskToManager(task); closeDetailModal()"
             >
-              В работе
+              <app-icon name="check" [size]="14"></app-icon>
+              <span>Задача готова (Отправить на проверку)</span>
             </button>
+            <div class="review-status-pill" *ngIf="task.status === 'review'">
+              <app-icon name="clock" [size]="14"></app-icon>
+              <span>Задача передана на проверку руководителю</span>
+            </div>
+          </ng-container>
+
+          <!-- Manager actions -->
+          <ng-container *ngIf="authService.isManager()">
             <button
               type="button"
-              class="stage-move-pill done"
-              [class.active]="task.status === 'done'"
-              (click)="moveTaskStatus(task, 'done')"
+              class="action-btn action-assign btn-lg"
+              *ngIf="task.status === 'todo'"
+              (click)="closeDetailModal(); openAssignModal(task)"
             >
-              Завершено
+              <app-icon name="user" [size]="14"></app-icon>
+              <span>{{ task.assigned_to ? 'Сменить исполнителя' : 'Назначить работника отдела' }}</span>
             </button>
-          </div>
+            <div class="manager-modal-review-actions" *ngIf="task.status === 'review'">
+              <button
+                type="button"
+                class="action-btn action-rework btn-lg"
+                (click)="closeDetailModal(); openReworkModal(task)"
+              >
+                <app-icon name="rotate-ccw" [size]="14"></app-icon>
+                <span>Отправить на перевыполнение</span>
+              </button>
+              <button
+                type="button"
+                class="action-btn action-approve btn-lg"
+                (click)="approveTask(task); closeDetailModal()"
+              >
+                <app-icon name="check" [size]="14"></app-icon>
+                <span>Подтвердить и закрыть задачу</span>
+              </button>
+            </div>
+          </ng-container>
         </div>
       </div>
 

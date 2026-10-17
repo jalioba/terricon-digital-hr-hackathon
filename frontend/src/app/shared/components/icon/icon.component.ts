@@ -262,6 +262,25 @@ import { CommonModule } from '@angular/common';
         <path d="M3 5v14a2 2 0 0 0 2 2h15a1 1 0 0 0 1-1v-4"/>
       </g>
 
+      <!-- Briefcase -->
+      <g *ngSwitchCase="'briefcase'">
+        <rect width="20" height="14" x="2" y="7" rx="2" ry="2"/>
+        <path d="M16 21V5a2 2 0 0 0-2-2h-4a2 2 0 0 0-2 2v16"/>
+      </g>
+
+      <!-- Play -->
+      <g *ngSwitchCase="'play'">
+        <polygon points="6 3 20 12 6 21 6 3"/>
+      </g>
+
+      <!-- Trash / Delete -->
+      <g *ngSwitchCase="'trash'">
+        <polyline points="3 6 5 6 21 6"/>
+        <path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/>
+        <line x1="10" y1="11" x2="10" y2="17"/>
+        <line x1="14" y1="11" x2="14" y2="17"/>
+      </g>
+
       <!-- Printer -->
       <g *ngSwitchCase="'printer'">
         <polyline points="6 9 6 2 18 2 18 9"/>
@@ -284,6 +303,6 @@ import { CommonModule } from '@angular/common';
 })
 export class IconComponent {
   @Input() name: string = 'home';
-  @Input() size: number = 20;
+  @Input() size: number | string = 20;
   @Input() extraClass: string = '';
 }

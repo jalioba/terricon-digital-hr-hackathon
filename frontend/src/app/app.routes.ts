@@ -4,6 +4,7 @@ import { HrEmployeesComponent } from './features/hr-employees/hr-employees.compo
 import { TasksComponent } from './features/tasks/tasks.component';
 import { RequestsComponent } from './features/requests/requests.component';
 import { AcademyComponent } from './features/academy/academy.component';
+import { AiComponent } from './features/ai/ai.component';
 import { PlaceholderComponent } from './features/placeholder/placeholder.component';
 
 export const routes: Routes = [
@@ -13,7 +14,7 @@ export const routes: Routes = [
   { path: 'tasks', component: TasksComponent },
   { path: 'requests', component: RequestsComponent, data: { title: 'Заявки сотрудников', icon: 'file-text' } },
   { path: 'academy', component: AcademyComponent, data: { title: 'Jana Academy', icon: 'graduation-cap' } },
-  { path: 'ai', component: PlaceholderComponent, data: { title: 'Jana AI Ассистент', icon: 'bot' } },
+  { path: 'ai', component: AiComponent, data: { title: 'Jana AI Ассистент', icon: 'bot' } },
   { path: 'hr/analytics', component: PlaceholderComponent, data: { title: 'HR Аналитика', icon: 'bar-chart' } },
   { path: 'profile', component: PlaceholderComponent, data: { title: 'Профиль сотрудника', icon: 'user' } },
   { path: '**', redirectTo: 'login' }

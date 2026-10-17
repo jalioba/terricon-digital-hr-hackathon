@@ -35,6 +35,13 @@ export class HrEmployeesComponent implements OnInit {
   modalError = signal<string>('');
   createdCredentials = signal<{ iin: string; pass: string; name: string } | null>(null);
 
+  // Delete modal state (HR only)
+  isDeleteModalOpen = signal<boolean>(false);
+  employeeToDelete = signal<User | null>(null);
+  isDeleting = signal<boolean>(false);
+  deleteError = signal<string>('');
+  deleteSuccessMessage = signal<string>('');
+
   // Filter signals for instant reactivity
   searchQuery = signal<string>('');
   selectedDept = signal<string>('all');
@@ -258,5 +265,47 @@ export class HrEmployeesComponent implements OnInit {
       return (parts[0][0] + parts[1][0]).toUpperCase();
     }
     return parts[0].slice(0, 2).toUpperCase();
+  }
+
+  // ==========================================
+  // DELETE EMPLOYEE / MANAGER (HR ONLY)
+  // ==========================================
+  openDeleteConfirmModal(emp: User): void {
+    this.employeeToDelete.set(emp);
+    this.deleteError.set('');
+    this.isDeleteModalOpen.set(true);
+  }
+
+  closeDeleteModal(): void {
+    this.isDeleteModalOpen.set(false);
+    this.employeeToDelete.set(null);
+    this.deleteError.set('');
+  }
+
+  confirmDeleteEmployee(): void {
+    const emp = this.employeeToDelete();
+    if (!emp) return;
+
+    this.isDeleting.set(true);
+    this.deleteError.set('');
+
+    this.api.delete<{ success: boolean; message: string }>(`/hr/employees/${emp.id}`).subscribe({
+      next: (res) => {
+        this.isDeleting.set(false);
+        this.closeDeleteModal();
+        this.loadEmployees();
+        this.deleteSuccessMessage.set(
+          res?.message || `Сотрудник ${emp.full_name} успешно удален из системы.`
+        );
+        setTimeout(() => {
+          this.deleteSuccessMessage.set('');
+        }, 5000);
+      },
+      error: (err) => {
+        this.isDeleting.set(false);
+        const msg = err?.error?.error || 'Не удалось удалить сотрудника из системы.';
+        this.deleteError.set(msg);
+      }
+    });
   }
 }

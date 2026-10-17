@@ -14,13 +14,14 @@ export interface TaskItem {
   description: string;
   department_id: number;
   created_by: number;
-  assigned_to: number;
+  assigned_to: number | null;
   due_date: string | null;
-  status: 'todo' | 'in_progress' | 'done';
+  status: 'todo' | 'in_progress' | 'review' | 'done';
+  rework_comment?: string | null;
   created_at: string;
   updated_at: string;
   creator_name?: string;
-  assignee_name?: string;
+  assignee_name?: string | null;
   dept_name_ru?: string;
   dept_code?: string;
 }
@@ -46,10 +47,13 @@ export class TasksComponent implements OnInit {
   // View modes: 'kanban' or 'list'
   viewMode = signal<'kanban' | 'list'>('kanban');
 
-  // Active filter tab: 'all', 'in_progress', 'my', 'delegated', 'overdue'
-  activeFilter = signal<'all' | 'in_progress' | 'my' | 'delegated' | 'overdue'>('all');
+  // Active filter tab: 'all' | 'todo' | 'in_progress' | 'review' | 'done' | 'unassigned'
+  activeFilter = signal<'all' | 'todo' | 'in_progress' | 'review' | 'done' | 'unassigned'>('all');
   searchQuery = signal<string>('');
   selectedDepartment = signal<string>('all');
+
+  // Notifications toast message
+  actionToast = signal<string>('');
 
   // Modals state
   isModalOpen = signal<boolean>(false);
@@ -57,39 +61,37 @@ export class TasksComponent implements OnInit {
   selectedTask = signal<TaskItem | null>(null);
   modalError = signal<string>('');
 
-  // Drag and Drop state
-  draggedTask = signal<TaskItem | null>(null);
-  dragOverColumn = signal<'todo' | 'in_progress' | 'done' | null>(null);
+  // Assign Worker Modal (Manager)
+  isAssignModalOpen = signal<boolean>(false);
+  taskToAssign = signal<TaskItem | null>(null);
+  selectedAssigneeId = signal<number | null>(null);
+  assignModalError = signal<string>('');
+
+  // Rework Modal (Manager)
+  isReworkModalOpen = signal<boolean>(false);
+  taskForRework = signal<TaskItem | null>(null);
+  reworkComment = signal<string>('');
+  reworkModalError = signal<string>('');
 
   // New task form state
   newTask = {
     title: '',
     description: '',
-    assignee_id: 0,
     department_id: 1,
-    due_date: '',
-    status: 'todo' as 'todo' | 'in_progress'
+    assignee_id: null as number | null,
+    due_date: ''
   };
 
-  // Computed signals for counts
-  totalCount = computed(() => this.tasks().length);
-  myTasksCount = computed(() => {
-    const uid = this.authService.currentUser()?.id;
-    return this.tasks().filter((t) => t.assigned_to === uid && t.status !== 'done').length;
-  });
-  delegatedCount = computed(() => {
-    const uid = this.authService.currentUser()?.id;
-    return this.tasks().filter((t) => t.created_by === uid && t.assigned_to !== uid).length;
-  });
-  overdueCount = computed(() => {
-    return this.tasks().filter((t) => t.status !== 'done' && this.isOverdue(t.due_date)).length;
-  });
-
-  managerDepartmentName = computed(() => {
+  // Department employees (for Manager assignment: only employees in their department)
+  departmentEmployees = computed(() => {
     const user = this.authService.currentUser();
-    if (user?.dept_ru) return user.dept_ru;
-    const dept = this.departments().find((d) => d.id === user?.department_id);
-    return dept ? (this.i18n.currentLang() === 'ru' ? dept.name_ru : dept.name_kz) : 'Мой отдел';
+    if (!user) return [];
+    if (this.authService.isManager()) {
+      return this.teamMembers().filter(
+        (m) => m.department_id === user.department_id && m.role === 'employee'
+      );
+    }
+    return this.teamMembers().filter((m) => m.role === 'employee');
   });
 
   // Filtered tasks pipeline
@@ -98,7 +100,6 @@ export class TasksComponent implements OnInit {
     const query = this.searchQuery().trim().toLowerCase();
     const filter = this.activeFilter();
     const dept = this.selectedDepartment();
-    const currentUid = this.authService.currentUser()?.id;
 
     // 1. Department filter (for HR)
     if (this.authService.isHr() && dept !== 'all') {
@@ -107,14 +108,16 @@ export class TasksComponent implements OnInit {
     }
 
     // 2. Tab filter
-    if (filter === 'in_progress') {
+    if (filter === 'todo') {
+      list = list.filter((t) => t.status === 'todo');
+    } else if (filter === 'in_progress') {
       list = list.filter((t) => t.status === 'in_progress');
-    } else if (filter === 'my') {
-      list = list.filter((t) => t.assigned_to === currentUid);
-    } else if (filter === 'delegated') {
-      list = list.filter((t) => t.created_by === currentUid && t.assigned_to !== currentUid);
-    } else if (filter === 'overdue') {
-      list = list.filter((t) => t.status !== 'done' && this.isOverdue(t.due_date));
+    } else if (filter === 'review') {
+      list = list.filter((t) => t.status === 'review');
+    } else if (filter === 'done') {
+      list = list.filter((t) => t.status === 'done');
+    } else if (filter === 'unassigned') {
+      list = list.filter((t) => !t.assigned_to);
     }
 
     // 3. Search query filter
@@ -134,7 +137,18 @@ export class TasksComponent implements OnInit {
   // Kanban Stage Columns
   todoTasks = computed(() => this.filteredTasks().filter((t) => t.status === 'todo'));
   inProgressTasks = computed(() => this.filteredTasks().filter((t) => t.status === 'in_progress'));
+  reviewTasks = computed(() => this.filteredTasks().filter((t) => t.status === 'review'));
   doneTasks = computed(() => this.filteredTasks().filter((t) => t.status === 'done'));
+
+  totalCount = computed(() => this.tasks().length);
+  unassignedCount = computed(() => this.tasks().filter((t) => !t.assigned_to).length);
+
+  managerDepartmentName = computed(() => {
+    const user = this.authService.currentUser();
+    if (user?.dept_ru) return user.dept_ru;
+    const dept = this.departments().find((d) => d.id === user?.department_id);
+    return dept ? (this.i18n.currentLang() === 'ru' ? dept.name_ru : dept.name_kz) : 'Мой отдел';
+  });
 
   ngOnInit(): void {
     this.loadDepartments();
@@ -182,70 +196,175 @@ export class TasksComponent implements OnInit {
     this.loadTasks();
   }
 
-  // Drag and Drop handlers
-  onDragStart(event: DragEvent, task: TaskItem): void {
-    this.draggedTask.set(task);
-    if (event.dataTransfer) {
-      event.dataTransfer.effectAllowed = 'move';
-      event.dataTransfer.setData('text/plain', String(task.id));
-    }
+  showToast(message: string): void {
+    this.actionToast.set(message);
+    setTimeout(() => {
+      this.actionToast.set('');
+    }, 4000);
   }
 
-  onDragOver(event: DragEvent, targetStatus: 'todo' | 'in_progress' | 'done'): void {
-    event.preventDefault();
-    if (event.dataTransfer) {
-      event.dataTransfer.dropEffect = 'move';
-    }
-    this.dragOverColumn.set(targetStatus);
-  }
+  // ==========================================
+  // EMPLOYEE ACTIONS
+  // ==========================================
 
-  onDragLeave(event: DragEvent): void {
-    event.preventDefault();
-    this.dragOverColumn.set(null);
-  }
-
-  onDrop(event: DragEvent, targetStatus: 'todo' | 'in_progress' | 'done'): void {
-    event.preventDefault();
-    this.dragOverColumn.set(null);
-    const task = this.draggedTask();
-    if (task && task.status !== targetStatus) {
-      this.moveTaskStatus(task, targetStatus);
-    }
-    this.draggedTask.set(null);
-  }
-
-  // Quick Advance / Status Move
-  moveTaskStatus(task: TaskItem, newStatus: 'todo' | 'in_progress' | 'done'): void {
-    const oldStatus = task.status;
-    if (oldStatus === newStatus) return;
-
-    // Optimistic UI update
-    this.tasks.update((list) =>
-      list.map((t) => (t.id === task.id ? { ...t, status: newStatus } : t))
-    );
-
-    if (this.selectedTask()?.id === task.id) {
-      this.selectedTask.update((t) => (t ? { ...t, status: newStatus } : null));
-    }
-
-    this.api.put(`/tasks/${task.id}/status`, { status: newStatus }).subscribe({
+  // Работник: Начать задачу (todo -> in_progress)
+  startTask(task: TaskItem): void {
+    this.api.put(`/tasks/${task.id}/status`, { status: 'in_progress' }).subscribe({
       next: () => {
-        // Success
+        this.tasks.update((list) =>
+          list.map((t) => (t.id === task.id ? { ...t, status: 'in_progress' } : t))
+        );
+        if (this.selectedTask()?.id === task.id) {
+          this.selectedTask.update((t) => (t ? { ...t, status: 'in_progress' } : null));
+        }
+        this.showToast('Задача взята в работу! Приступайте к выполнению.');
       },
       error: (err) => {
-        console.error('Failed to update task status', err);
-        // Revert back on error
-        this.tasks.update((list) =>
-          list.map((t) => (t.id === task.id ? { ...t, status: oldStatus } : t))
-        );
+        console.error('Failed to start task', err);
+        alert(err?.error?.error || 'Не удалось начать задачу.');
       }
     });
   }
 
-  // Modal Open / Close
-  openCreateModal(defaultStatus: 'todo' | 'in_progress' = 'todo'): void {
+  // Работник: Задача готова -> отправить руководителю на проверку (in_progress -> review)
+  submitTaskToManager(task: TaskItem): void {
+    this.api.put(`/tasks/${task.id}/status`, { status: 'review' }).subscribe({
+      next: () => {
+        this.tasks.update((list) =>
+          list.map((t) => (t.id === task.id ? { ...t, status: 'review' } : t))
+        );
+        if (this.selectedTask()?.id === task.id) {
+          this.selectedTask.update((t) => (t ? { ...t, status: 'review' } : null));
+        }
+        this.showToast('Задача отправлена руководителю на проверку.');
+      },
+      error: (err) => {
+        console.error('Failed to submit task for review', err);
+        alert(err?.error?.error || 'Не удалось отправить задачу на проверку.');
+      }
+    });
+  }
+
+  // ==========================================
+  // MANAGER ACTIONS
+  // ==========================================
+
+  // Руководитель: Назначить исполнителя из своего отдела
+  openAssignModal(task: TaskItem): void {
+    this.taskToAssign.set(task);
+    const workers = this.departmentEmployees();
+    this.selectedAssigneeId.set(workers.length > 0 ? workers[0].id : null);
+    this.assignModalError.set('');
+    this.isAssignModalOpen.set(true);
+  }
+
+  closeAssignModal(): void {
+    this.isAssignModalOpen.set(false);
+    this.taskToAssign.set(null);
+    this.selectedAssigneeId.set(null);
+    this.assignModalError.set('');
+  }
+
+  submitAssignWorker(): void {
+    const task = this.taskToAssign();
+    const assigneeId = this.selectedAssigneeId();
+    if (!task || !assigneeId) {
+      this.assignModalError.set('Выберите сотрудника своего отдела.');
+      return;
+    }
+
+    this.isSubmitting.set(true);
+    this.assignModalError.set('');
+
+    this.api.put(`/tasks/${task.id}/assign`, { assignee_id: assigneeId }).subscribe({
+      next: () => {
+        this.isSubmitting.set(false);
+        this.closeAssignModal();
+        this.loadTasks();
+        const worker = this.departmentEmployees().find((w) => w.id === assigneeId);
+        this.showToast(
+          `Сотрудник ${worker?.full_name || ''} назначен исполнителем. Уведомление отправлено.`
+        );
+      },
+      error: (err) => {
+        this.isSubmitting.set(false);
+        this.assignModalError.set(err?.error?.error || 'Ошибка назначения исполнителя.');
+      }
+    });
+  }
+
+  // Руководитель: Подтвердить выполнение задачи (review -> done)
+  approveTask(task: TaskItem): void {
+    this.api.put(`/tasks/${task.id}/status`, { status: 'done' }).subscribe({
+      next: () => {
+        this.tasks.update((list) =>
+          list.map((t) => (t.id === task.id ? { ...t, status: 'done', rework_comment: '' } : t))
+        );
+        if (this.selectedTask()?.id === task.id) {
+          this.selectedTask.update((t) =>
+            t ? { ...t, status: 'done', rework_comment: '' } : null
+          );
+        }
+        this.showToast('Задача успешно подтверждена и закрыта.');
+      },
+      error: (err) => {
+        console.error('Failed to approve task', err);
+        alert(err?.error?.error || 'Ошибка подтверждения задачи.');
+      }
+    });
+  }
+
+  // Руководитель: Отправить на перевыполнение (review -> in_progress с комментарием)
+  openReworkModal(task: TaskItem): void {
+    this.taskForRework.set(task);
+    this.reworkComment.set('');
+    this.reworkModalError.set('');
+    this.isReworkModalOpen.set(true);
+  }
+
+  closeReworkModal(): void {
+    this.isReworkModalOpen.set(false);
+    this.taskForRework.set(null);
+    this.reworkComment.set('');
+    this.reworkModalError.set('');
+  }
+
+  submitRework(): void {
+    const task = this.taskForRework();
+    const comment = this.reworkComment().trim();
+    if (!task) return;
+    if (!comment) {
+      this.reworkModalError.set('Укажите комментарий или причину отправки на перевыполнение.');
+      return;
+    }
+
+    this.isSubmitting.set(true);
+    this.reworkModalError.set('');
+
+    this.api
+      .put(`/tasks/${task.id}/status`, {
+        status: 'in_progress',
+        rework_comment: comment
+      })
+      .subscribe({
+        next: () => {
+          this.isSubmitting.set(false);
+          this.closeReworkModal();
+          this.loadTasks();
+          this.showToast('Задача отправлена работнику на перевыполнение с вашими замечаниями.');
+        },
+        error: (err) => {
+          this.isSubmitting.set(false);
+          this.reworkModalError.set(err?.error?.error || 'Ошибка отправки на перевыполнение.');
+        }
+      });
+  }
+
+  // ==========================================
+  // CREATE TASK (HR & MANAGER)
+  // ==========================================
+  openCreateModal(): void {
     const user = this.authService.currentUser();
-    const defaultAssignee = user ? user.id : 0;
     const defaultDept = user?.department_id || 1;
 
     // Set default due date to 5 days from now
@@ -256,10 +375,9 @@ export class TasksComponent implements OnInit {
     this.newTask = {
       title: '',
       description: '',
-      assignee_id: defaultAssignee,
       department_id: defaultDept,
-      due_date: dateStr,
-      status: defaultStatus
+      assignee_id: null,
+      due_date: dateStr
     };
     this.modalError.set('');
     this.isModalOpen.set(true);
@@ -276,26 +394,36 @@ export class TasksComponent implements OnInit {
       this.modalError.set('Укажите название задачи.');
       return;
     }
-    if (!this.newTask.assignee_id) {
-      this.modalError.set('Выберите исполнителя задачи.');
+
+    if (this.authService.isHr() && !this.newTask.department_id) {
+      this.modalError.set('Выберите отдел назначения.');
       return;
     }
 
     this.isSubmitting.set(true);
     this.modalError.set('');
 
-    const payload = {
+    const payload: any = {
       title,
       description: this.newTask.description.trim(),
-      assignee_id: Number(this.newTask.assignee_id),
+      department_id: Number(this.newTask.department_id),
       due_date: this.newTask.due_date || null
     };
 
+    if (this.authService.isManager() && this.newTask.assignee_id) {
+      payload.assignee_id = Number(this.newTask.assignee_id);
+    }
+
     this.api.post<TaskItem>('/tasks', payload).subscribe({
-      next: (created) => {
+      next: () => {
         this.isSubmitting.set(false);
         this.closeModal();
         this.loadTasks();
+        if (this.authService.isHr()) {
+          this.showToast('Задача успешно направлена в отдел! Руководитель получил оповещение.');
+        } else {
+          this.showToast('Задача успешно создана.');
+        }
       },
       error: (err) => {
         this.isSubmitting.set(false);
@@ -305,7 +433,9 @@ export class TasksComponent implements OnInit {
     });
   }
 
-  // Task Details Modal
+  // ==========================================
+  // TASK DETAILS MODAL
+  // ==========================================
   viewTaskDetails(task: TaskItem): void {
     this.selectedTask.set(task);
     this.isDetailModalOpen.set(true);
@@ -350,7 +480,7 @@ export class TasksComponent implements OnInit {
     }
   }
 
-  getInitials(name: string | undefined): string {
+  getInitials(name: string | null | undefined): string {
     if (!name) return '??';
     const parts = name.trim().split(/\s+/);
     if (parts.length >= 2) {

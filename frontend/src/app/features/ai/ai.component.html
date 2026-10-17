@@ -1,0 +1,228 @@
+<div class="ai-container">
+  <!-- Top Navigation & Engine Status Bar -->
+  <header class="ai-header">
+    <div class="ai-header-left">
+      <div class="bot-avatar-badge">
+        <app-icon name="bot" size="26" extraClass="bot-icon"></app-icon>
+        <span class="online-indicator" title="Ассистент онлайн"></span>
+      </div>
+      <div class="ai-title-block">
+        <div class="ai-title-row">
+          <h1 class="ai-title">JAŃA AI Ассистент</h1>
+          <span class="engine-badge" [class.gemini]="hasGeminiKey()" [class.builtin]="!hasGeminiKey()">
+            <app-icon [name]="hasGeminiKey() ? 'sparkles' : 'shield'" size="14"></app-icon>
+            {{ hasGeminiKey() ? 'Google Gemini 1.5 Flash' : 'Встроенный RAG движок (0 ₸)' }}
+          </span>
+        </div>
+        <p class="ai-subtitle">
+          Интеллектуальный консультант по регламентам, процессам и данным платформы JanaPost
+        </p>
+      </div>
+    </div>
+
+    <div class="ai-header-right">
+      <button type="button" class="btn-api-settings" (click)="openKeyModal()" title="Настроить Gemini API ключ">
+        <app-icon name="settings" size="16"></app-icon>
+        <span>Ключ Gemini</span>
+        <span class="key-status-dot" [class.active]="hasGeminiKey()"></span>
+      </button>
+
+      <button type="button" class="btn-clear-chat" (click)="clearChat()" title="Очистить переписку">
+        <app-icon name="trash" size="16"></app-icon>
+        <span>Очистить</span>
+      </button>
+    </div>
+  </header>
+
+  <!-- Role-Based Quick Prompts Bar -->
+  <div class="quick-prompts-section">
+    <div class="quick-prompts-label">
+      <app-icon name="sparkles" size="14"></app-icon>
+      <span>Быстрые вопросы для вашей роли:</span>
+    </div>
+    <div class="quick-prompts-scroll">
+      <button
+        *ngFor="let prompt of quickPrompts()"
+        type="button"
+        class="quick-prompt-chip"
+        [disabled]="isLoading()"
+        (click)="sendMessage(prompt.label)"
+      >
+        <app-icon [name]="prompt.icon" size="14" extraClass="prompt-icon"></app-icon>
+        <span>{{ prompt.label }}</span>
+      </button>
+    </div>
+  </div>
+
+  <!-- Messages Chat Area -->
+  <main class="chat-messages-scroll" #chatScrollContainer>
+    <div class="messages-wrapper">
+      <div
+        *ngFor="let msg of messages()"
+        class="chat-bubble-row"
+        [class.row-user]="msg.sender === 'user'"
+        [class.row-assistant]="msg.sender === 'assistant'"
+      >
+        <!-- Assistant Avatar -->
+        <div class="message-avatar" *ngIf="msg.sender === 'assistant'">
+          <div class="bot-circle">
+            <app-icon name="bot" size="18"></app-icon>
+          </div>
+        </div>
+
+        <!-- Bubble Body -->
+        <div
+          class="chat-bubble"
+          [class.user-bubble]="msg.sender === 'user'"
+          [class.assistant-bubble]="msg.sender === 'assistant'"
+          [class.action-warning-bubble]="msg.isActionWarning"
+        >
+          <!-- Warning banner if an action was requested -->
+          <div class="action-shield-alert" *ngIf="msg.isActionWarning">
+            <app-icon name="alert-triangle" size="16"></app-icon>
+            <span>Режим консультанта: выполнение команд заблокировано</span>
+          </div>
+
+          <!-- Message Text -->
+          <div class="bubble-content" [innerHTML]="formatMarkdown(msg.text)"></div>
+
+          <!-- Assistant Meta & Sources -->
+          <div class="bubble-meta" *ngIf="msg.sender === 'assistant'">
+            <div class="source-tag" *ngIf="msg.sourceDoc">
+              <app-icon name="file-text" size="12"></app-icon>
+              <span>{{ msg.sourceDoc }}<ng-container *ngIf="msg.sourceSection">, {{ msg.sourceSection }}</ng-container></span>
+            </div>
+
+            <div class="provider-tag" *ngIf="msg.provider">
+              <span *ngIf="msg.provider === 'builtin:janamen_rag'" class="prov-pill builtin">
+                <app-icon name="shield" size="11"></app-icon> База данных JanaMen
+              </span>
+              <span *ngIf="msg.provider === 'gemini:1.5-flash'" class="prov-pill gemini">
+                <app-icon name="sparkles" size="11"></app-icon> Gemini 1.5 Flash
+              </span>
+              <span *ngIf="msg.provider.startsWith('guardrail:')" class="prov-pill guard">
+                <app-icon name="shield" size="11"></app-icon> Шлюз безопасности
+              </span>
+            </div>
+
+            <span class="message-time">{{ msg.timestamp | date:'HH:mm' }}</span>
+          </div>
+
+          <!-- User Meta -->
+          <div class="bubble-meta user-meta" *ngIf="msg.sender === 'user'">
+            <span class="message-time">{{ msg.timestamp | date:'HH:mm' }}</span>
+          </div>
+        </div>
+
+        <!-- User Avatar -->
+        <div class="message-avatar" *ngIf="msg.sender === 'user'">
+          <div class="user-circle">
+            <app-icon name="user" size="18"></app-icon>
+          </div>
+        </div>
+      </div>
+
+      <!-- Loading Typing Bubble -->
+      <div class="chat-bubble-row row-assistant" *ngIf="isLoading()">
+        <div class="message-avatar">
+          <div class="bot-circle pulsing">
+            <app-icon name="bot" size="18"></app-icon>
+          </div>
+        </div>
+        <div class="chat-bubble assistant-bubble typing-bubble">
+          <div class="typing-indicator">
+            <span></span>
+            <span></span>
+            <span></span>
+          </div>
+          <span class="typing-text">Ассистент анализирует регламенты и формирует ответ...</span>
+        </div>
+      </div>
+    </div>
+  </main>
+
+  <!-- Input Bar & Footer -->
+  <footer class="ai-footer">
+    <form class="input-form" (ngSubmit)="sendMessage()">
+      <div class="input-container">
+        <textarea
+          rows="1"
+          class="chat-input"
+          placeholder="Задайте вопрос по регламентам, отпуску, задачам или отделу..."
+          [ngModel]="inputText()"
+          (ngModelChange)="inputText.set($event)"
+          name="message"
+          (keydown.enter)="$event.preventDefault(); sendMessage()"
+          [disabled]="isLoading()"
+        ></textarea>
+        
+        <button
+          type="submit"
+          class="btn-send"
+          [disabled]="!inputText().trim() || isLoading()"
+          title="Отправить вопрос"
+        >
+          <app-icon name="send" size="18"></app-icon>
+        </button>
+      </div>
+    </form>
+
+    <div class="security-disclaimer">
+      <app-icon name="shield" size="13" extraClass="disclaimer-icon"></app-icon>
+      <span>
+        Корпоративный ИИ JanaMen отвечает исключительно на информационные вопросы в рамках полномочий вашей роли и не вносит изменений в данные.
+      </span>
+    </div>
+  </footer>
+
+  <!-- Gemini API Key Modal -->
+  <div class="modal-backdrop" *ngIf="isKeyModalOpen()" (click)="closeKeyModal()">
+    <div class="modal-dialog" (click)="$event.stopPropagation()">
+      <div class="modal-header">
+        <div class="modal-title-wrap">
+          <app-icon name="sparkles" size="20" extraClass="modal-sparkle"></app-icon>
+          <h3>Настройка Google Gemini API</h3>
+        </div>
+        <button type="button" class="btn-close-modal" (click)="closeKeyModal()">
+          <app-icon name="x" size="18"></app-icon>
+        </button>
+      </div>
+
+      <div class="modal-body">
+        <p class="modal-desc">
+          По умолчанию в системе работает <strong>бесплатный встроенный движок</strong> без необходимости сторонних ключей.
+          Вы можете ввести свой бесплатный ключ Google Gemini 1.5 Flash для более естественного диалогового стиля:
+        </p>
+
+        <div class="form-group">
+          <label class="form-label">API-ключ Google Gemini:</label>
+          <input
+            type="password"
+            class="form-control"
+            placeholder="AIzaSy..."
+            [ngModel]="keyInputValue()"
+            (ngModelChange)="keyInputValue.set($event)"
+          />
+          <div class="input-hint">
+            Ключ сохраняется локально в вашем браузере (<code>localStorage</code>) и не передается третьим лицам.
+            Получить бесплатный ключ можно в <a href="https://aistudio.google.com/app/apikey" target="_blank" rel="noopener">Google AI Studio</a>.
+          </div>
+        </div>
+
+        <div class="alert-notice-box" *ngIf="keySavedNotice()">
+          <app-icon name="check-circle" size="16"></app-icon>
+          <span>{{ keySavedNotice() }}</span>
+        </div>
+      </div>
+
+      <div class="modal-footer">
+        <button type="button" class="btn-secondary" (click)="removeApiKey()" *ngIf="apiKey()">
+          Сбросить (Вернуться на бесплатный)
+        </button>
+        <button type="button" class="btn-primary" (click)="saveApiKey()">
+          Сохранить настройки
+        </button>
+      </div>
+    </div>
+  </div>
+</div>

@@ -43,6 +43,16 @@
     </button>
   </div>
 
+  <!-- Success Notification on Employee Deletion -->
+  <div class="credentials-alert delete-success-banner" *ngIf="deleteSuccessMessage()">
+    <div class="cred-info">
+      <div class="cred-title">{{ deleteSuccessMessage() }}</div>
+    </div>
+    <button type="button" class="btn-close-cred" (click)="deleteSuccessMessage.set('')" title="Закрыть">
+      <app-icon name="x" [size]="16"></app-icon>
+    </button>
+  </div>
+
   <!-- KPI Statistics Cards (Clean Flat Enterprise) -->
   <div class="stats-grid">
     <!-- HR View: Company-wide metrics -->
@@ -198,6 +208,7 @@
             <th>{{ i18n.t('hr.col_role') }}</th>
             <th>{{ i18n.t('hr.col_vacation') }}</th>
             <th>{{ i18n.t('hr.col_date') }}</th>
+            <th *ngIf="authService.isHr()" style="text-align: right; width: 120px;">Действия</th>
           </tr>
         </thead>
         <tbody *ngIf="filteredEmployees().length > 0">
@@ -251,6 +262,20 @@
               <span class="text-sm text-gray-500">
                 {{ emp.hired_at | date:'dd.MM.yyyy' }}
               </span>
+            </td>
+
+            <!-- Actions (HR only: Delete on resignation) -->
+            <td *ngIf="authService.isHr()" style="text-align: right;">
+              <button
+                type="button"
+                class="btn-delete-row"
+                *ngIf="emp.id !== authService.currentUser()?.id"
+                (click)="openDeleteConfirmModal(emp)"
+                title="Удалить сотрудника / руководителя (при увольнении)"
+              >
+                <app-icon name="trash" [size]="14"></app-icon>
+                <span>Уволить</span>
+              </button>
             </td>
           </tr>
         </tbody>
@@ -425,6 +450,69 @@
           </button>
         </div>
       </form>
+    </div>
+  </div>
+
+  <!-- ========================================================
+       MODAL: CONFIRM EMPLOYEE DELETION / RESIGNATION (HR ONLY)
+       ======================================================== -->
+  <div class="modal-backdrop" *ngIf="isDeleteModalOpen()" (click)="closeDeleteModal()">
+    <div class="modal-dialog modal-delete-card" (click)="$event.stopPropagation()" *ngIf="employeeToDelete() as emp">
+      <div class="modal-header">
+        <div class="modal-title-box">
+          <h2 class="modal-title text-danger">Увольнение / Удаление из системы</h2>
+          <p class="modal-subtitle">Подтвердите действие по удалению профиля сотрудника или руководителя</p>
+        </div>
+        <button type="button" class="modal-close-btn" (click)="closeDeleteModal()" title="Закрыть">
+          <app-icon name="x" [size]="18"></app-icon>
+        </button>
+      </div>
+
+      <!-- Error Alert -->
+      <div class="error-alert" *ngIf="deleteError()" style="margin: 16px 20px 0;">
+        <app-icon name="alert-triangle" [size]="16"></app-icon>
+        <span>{{ deleteError() }}</span>
+      </div>
+
+      <div class="delete-modal-body">
+        <div class="delete-warning-box">
+          <div class="delete-warning-icon">
+            <app-icon name="alert-triangle" [size]="24"></app-icon>
+          </div>
+          <div class="delete-warning-content">
+            <div class="delete-warning-title">Внимание! Вы собираетесь удалить учетную запись:</div>
+            <div class="delete-user-preview">
+              <div class="del-name">{{ emp.full_name }}</div>
+              <div class="del-meta">
+                <span class="badge badge-blue" *ngIf="emp.role === 'manager'">Руководитель</span>
+                <span class="badge badge-amber" *ngIf="emp.role === 'employee'">Работник</span>
+                <span>ИИН: {{ emp.iin }}</span>
+                <span>Должность: {{ emp.position }}</span>
+                <span>{{ emp.dept_ru || 'Без отдела' }}</span>
+              </div>
+            </div>
+            <p class="delete-subtext">
+              Учетная запись будет удалена, доступ сотрудника к системе аннулирован, а активные задачи сотрудника перейдут в статус без исполнителя для последующего перераспределения.
+            </p>
+          </div>
+        </div>
+      </div>
+
+      <div class="modal-footer">
+        <button type="button" class="btn-cancel" (click)="closeDeleteModal()" [disabled]="isDeleting()">
+          Отмена
+        </button>
+        <button
+          type="button"
+          class="btn-delete-confirm"
+          (click)="confirmDeleteEmployee()"
+          [disabled]="isDeleting()"
+        >
+          <span class="spinner-sm" *ngIf="isDeleting()"></span>
+          <app-icon name="trash" [size]="15" *ngIf="!isDeleting()"></app-icon>
+          <span *ngIf="!isDeleting()">Удалить (Уволен)</span>
+        </button>
+      </div>
     </div>
   </div>
 </div>
