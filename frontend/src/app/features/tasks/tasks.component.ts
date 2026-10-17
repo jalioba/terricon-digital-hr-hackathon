@@ -73,6 +73,11 @@ export class TasksComponent implements OnInit {
   reworkComment = signal<string>('');
   reworkModalError = signal<string>('');
 
+  // Delete Task Confirmation Modal (Manager & HR)
+  isDeleteModalOpen = signal<boolean>(false);
+  taskToDelete = signal<TaskItem | null>(null);
+  isDeletingTask = signal<boolean>(false);
+
   // New task form state
   newTask = {
     title: '',
@@ -433,20 +438,38 @@ export class TasksComponent implements OnInit {
     });
   }
 
-  // Отправить выполненную задачу в корзину (удалить)
-  deleteTask(task: TaskItem): void {
-    if (!confirm(`Вы действительно хотите отправить выполненную задачу «${task.title}» в корзину?`)) {
-      return;
-    }
+  // ==========================================
+  // DELETE TASK MODAL (MANAGER & HR ONLY)
+  // ==========================================
+  openDeleteModal(task: TaskItem): void {
+    if (this.authService.isEmployee()) return;
+    this.taskToDelete.set(task);
+    this.isDeleteModalOpen.set(true);
+  }
+
+  closeDeleteModal(): void {
+    this.isDeleteModalOpen.set(false);
+    this.taskToDelete.set(null);
+    this.isDeletingTask.set(false);
+  }
+
+  confirmDeleteTask(): void {
+    const task = this.taskToDelete();
+    if (!task) return;
+
+    this.isDeletingTask.set(true);
     this.api.delete(`/tasks/${task.id}`).subscribe({
       next: () => {
+        this.isDeletingTask.set(false);
         this.tasks.update((list) => list.filter((t) => t.id !== task.id));
         if (this.selectedTask()?.id === task.id) {
           this.closeDetailModal();
         }
-        this.showToast('Задача перемещена в корзину и удалена.');
+        this.closeDeleteModal();
+        this.showToast('Задача успешно перемещена в корзину и удалена.');
       },
       error: (err) => {
+        this.isDeletingTask.set(false);
         console.error('Failed to delete task', err);
         alert(err?.error?.error || 'Ошибка удаления задачи.');
       }

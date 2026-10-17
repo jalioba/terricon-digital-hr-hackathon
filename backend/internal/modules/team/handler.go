@@ -517,6 +517,11 @@ func (h *Handler) DeleteTask(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	if c.Role == "employee" {
+		httputil.Error(w, http.StatusForbidden, "Доступ запрещен: сотрудники не могут удалять задачи")
+		return
+	}
+
 	if c.Role == "manager" && c.DepartmentID != nil && task.DepartmentID != *c.DepartmentID {
 		httputil.Error(w, http.StatusForbidden, "Доступ запрещен: задача принадлежит другому отделу")
 		return
