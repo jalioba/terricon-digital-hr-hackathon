@@ -17,6 +17,9 @@ INSERT INTO users (iin, password_hash, full_name, role, department_id, company, 
 VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)
 RETURNING *;
 
+-- name: DeleteUser :exec
+DELETE FROM users WHERE id = $1;
+
 -- name: ListAllUsers :many
 SELECT u.id, u.iin, u.full_name, u.role, u.department_id, u.company, u.position,
        u.hired_at, u.vacation_days_left, u.created_at,
@@ -125,31 +128,39 @@ RETURNING *;
 -- name: ListAllTasks :many
 SELECT t.*, creator.full_name AS creator_name, assignee.full_name AS assignee_name, d.name_ru AS dept_name_ru, d.code AS dept_code
 FROM tasks t
-JOIN users creator ON creator.id = t.created_by
-JOIN users assignee ON assignee.id = t.assigned_to
+LEFT JOIN users creator ON creator.id = t.created_by
+LEFT JOIN users assignee ON assignee.id = t.assigned_to
 JOIN departments d ON d.id = t.department_id
 ORDER BY t.due_date NULLS LAST, t.id DESC;
 
 -- name: ListTasksByUser :many
 SELECT t.*, creator.full_name AS creator_name, assignee.full_name AS assignee_name, d.name_ru AS dept_name_ru, d.code AS dept_code
 FROM tasks t
-JOIN users creator ON creator.id = t.created_by
-JOIN users assignee ON assignee.id = t.assigned_to
+LEFT JOIN users creator ON creator.id = t.created_by
+LEFT JOIN users assignee ON assignee.id = t.assigned_to
 JOIN departments d ON d.id = t.department_id
-WHERE t.assigned_to = $1 OR t.created_by = $1
+WHERE t.assigned_to = $1
 ORDER BY t.due_date NULLS LAST, t.id DESC;
 
 -- name: ListTasksByDepartment :many
 SELECT t.*, creator.full_name AS creator_name, assignee.full_name AS assignee_name, d.name_ru AS dept_name_ru, d.code AS dept_code
 FROM tasks t
-JOIN users creator ON creator.id = t.created_by
-JOIN users assignee ON assignee.id = t.assigned_to
+LEFT JOIN users creator ON creator.id = t.created_by
+LEFT JOIN users assignee ON assignee.id = t.assigned_to
 JOIN departments d ON d.id = t.department_id
 WHERE t.department_id = $1
 ORDER BY t.due_date NULLS LAST, t.id DESC;
 
+-- name: AssignTask :exec
+UPDATE tasks
+SET assigned_to = $2, rework_comment = '', updated_at = now()
+WHERE id = $1;
+
 -- name: UpdateTaskStatus :exec
 UPDATE tasks SET status = $2, updated_at = now() WHERE id = $1;
+
+-- name: UpdateTaskStatusWithComment :exec
+UPDATE tasks SET status = $2, rework_comment = $3, updated_at = now() WHERE id = $1;
 
 -- name: GetTask :one
 SELECT * FROM tasks WHERE id = $1;
@@ -269,4 +280,12 @@ INSERT INTO ai_escalations (user_id, question) VALUES ($1, $2) RETURNING *;
 
 -- name: ListEscalations :many
 SELECT e.*, u.full_name FROM ai_escalations e JOIN users u ON u.id = e.user_id ORDER BY e.created_at DESC;
+
+-- name: GetCompanySummaryStats :one
+SELECT 
+  (SELECT COUNT(*)::int FROM users) as total_users,
+  (SELECT COUNT(*)::int FROM departments) as total_departments,
+  (SELECT COUNT(*)::int FROM requests WHERE status = 'pending') as pending_requests,
+  (SELECT COUNT(*)::int FROM tasks WHERE status != 'done') as active_tasks;
+
 

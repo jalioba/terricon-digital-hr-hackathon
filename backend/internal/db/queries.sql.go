@@ -176,6 +176,22 @@ func (q *Queries) AssignCourse(ctx context.Context, arg AssignCourseParams) erro
 	return err
 }
 
+const assignTask = `-- name: AssignTask :exec
+UPDATE tasks
+SET assigned_to = $2, rework_comment = '', updated_at = now()
+WHERE id = $1
+`
+
+type AssignTaskParams struct {
+	ID         int  `json:"id"`
+	AssignedTo *int `json:"assigned_to"`
+}
+
+func (q *Queries) AssignTask(ctx context.Context, arg AssignTaskParams) error {
+	_, err := q.db.Exec(ctx, assignTask, arg.ID, arg.AssignedTo)
+	return err
+}
+
 const completeCourse = `-- name: CompleteCourse :exec
 UPDATE course_assignments
 SET status = 'completed', progress = 100, score = $3, completed_at = now()
@@ -342,7 +358,7 @@ func (q *Queries) CreateRequest(ctx context.Context, arg CreateRequestParams) (R
 const createTask = `-- name: CreateTask :one
 INSERT INTO tasks (title, description, department_id, created_by, assigned_to, due_date, status)
 VALUES ($1, $2, $3, $4, $5, $6, $7)
-RETURNING id, title, description, department_id, created_by, assigned_to, due_date, status, created_at, updated_at
+RETURNING id, title, description, department_id, created_by, assigned_to, due_date, status, rework_comment, created_at, updated_at
 `
 
 type CreateTaskParams struct {
@@ -350,7 +366,7 @@ type CreateTaskParams struct {
 	Description  string     `json:"description"`
 	DepartmentID int        `json:"department_id"`
 	CreatedBy    int        `json:"created_by"`
-	AssignedTo   int        `json:"assigned_to"`
+	AssignedTo   *int       `json:"assigned_to"`
 	DueDate      *time.Time `json:"due_date"`
 	Status       string     `json:"status"`
 }
@@ -375,6 +391,7 @@ func (q *Queries) CreateTask(ctx context.Context, arg CreateTaskParams) (Task, e
 		&i.AssignedTo,
 		&i.DueDate,
 		&i.Status,
+		&i.ReworkComment,
 		&i.CreatedAt,
 		&i.UpdatedAt,
 	)
@@ -437,6 +454,15 @@ func (q *Queries) DeleteKB(ctx context.Context, id int) error {
 	return err
 }
 
+const deleteUser = `-- name: DeleteUser :exec
+DELETE FROM users WHERE id = $1
+`
+
+func (q *Queries) DeleteUser(ctx context.Context, id int) error {
+	_, err := q.db.Exec(ctx, deleteUser, id)
+	return err
+}
+
 const getAssignment = `-- name: GetAssignment :one
 SELECT id, course_id, user_id, status, progress, score, assigned_at, completed_at FROM course_assignments WHERE course_id = $1 AND user_id = $2
 `
@@ -458,6 +484,33 @@ func (q *Queries) GetAssignment(ctx context.Context, arg GetAssignmentParams) (C
 		&i.Score,
 		&i.AssignedAt,
 		&i.CompletedAt,
+	)
+	return i, err
+}
+
+const getCompanySummaryStats = `-- name: GetCompanySummaryStats :one
+SELECT 
+  (SELECT COUNT(*)::int FROM users) as total_users,
+  (SELECT COUNT(*)::int FROM departments) as total_departments,
+  (SELECT COUNT(*)::int FROM requests WHERE status = 'pending') as pending_requests,
+  (SELECT COUNT(*)::int FROM tasks WHERE status != 'done') as active_tasks
+`
+
+type GetCompanySummaryStatsRow struct {
+	TotalUsers       int `json:"total_users"`
+	TotalDepartments int `json:"total_departments"`
+	PendingRequests  int `json:"pending_requests"`
+	ActiveTasks      int `json:"active_tasks"`
+}
+
+func (q *Queries) GetCompanySummaryStats(ctx context.Context) (GetCompanySummaryStatsRow, error) {
+	row := q.db.QueryRow(ctx, getCompanySummaryStats)
+	var i GetCompanySummaryStatsRow
+	err := row.Scan(
+		&i.TotalUsers,
+		&i.TotalDepartments,
+		&i.PendingRequests,
+		&i.ActiveTasks,
 	)
 	return i, err
 }
@@ -572,7 +625,7 @@ func (q *Queries) GetRequest(ctx context.Context, id int) (GetRequestRow, error)
 }
 
 const getTask = `-- name: GetTask :one
-SELECT id, title, description, department_id, created_by, assigned_to, due_date, status, created_at, updated_at FROM tasks WHERE id = $1
+SELECT id, title, description, department_id, created_by, assigned_to, due_date, status, rework_comment, created_at, updated_at FROM tasks WHERE id = $1
 `
 
 func (q *Queries) GetTask(ctx context.Context, id int) (Task, error) {
@@ -587,6 +640,7 @@ func (q *Queries) GetTask(ctx context.Context, id int) (Task, error) {
 		&i.AssignedTo,
 		&i.DueDate,
 		&i.Status,
+		&i.ReworkComment,
 		&i.CreatedAt,
 		&i.UpdatedAt,
 	)
@@ -767,29 +821,30 @@ func (q *Queries) ListAllRequests(ctx context.Context) ([]ListAllRequestsRow, er
 }
 
 const listAllTasks = `-- name: ListAllTasks :many
-SELECT t.id, t.title, t.description, t.department_id, t.created_by, t.assigned_to, t.due_date, t.status, t.created_at, t.updated_at, creator.full_name AS creator_name, assignee.full_name AS assignee_name, d.name_ru AS dept_name_ru, d.code AS dept_code
+SELECT t.id, t.title, t.description, t.department_id, t.created_by, t.assigned_to, t.due_date, t.status, t.rework_comment, t.created_at, t.updated_at, creator.full_name AS creator_name, assignee.full_name AS assignee_name, d.name_ru AS dept_name_ru, d.code AS dept_code
 FROM tasks t
-JOIN users creator ON creator.id = t.created_by
-JOIN users assignee ON assignee.id = t.assigned_to
+LEFT JOIN users creator ON creator.id = t.created_by
+LEFT JOIN users assignee ON assignee.id = t.assigned_to
 JOIN departments d ON d.id = t.department_id
 ORDER BY t.due_date NULLS LAST, t.id DESC
 `
 
 type ListAllTasksRow struct {
-	ID           int        `json:"id"`
-	Title        string     `json:"title"`
-	Description  string     `json:"description"`
-	DepartmentID int        `json:"department_id"`
-	CreatedBy    int        `json:"created_by"`
-	AssignedTo   int        `json:"assigned_to"`
-	DueDate      *time.Time `json:"due_date"`
-	Status       string     `json:"status"`
-	CreatedAt    time.Time  `json:"created_at"`
-	UpdatedAt    time.Time  `json:"updated_at"`
-	CreatorName  string     `json:"creator_name"`
-	AssigneeName string     `json:"assignee_name"`
-	DeptNameRu   string     `json:"dept_name_ru"`
-	DeptCode     string     `json:"dept_code"`
+	ID            int        `json:"id"`
+	Title         string     `json:"title"`
+	Description   string     `json:"description"`
+	DepartmentID  int        `json:"department_id"`
+	CreatedBy     int        `json:"created_by"`
+	AssignedTo    *int       `json:"assigned_to"`
+	DueDate       *time.Time `json:"due_date"`
+	Status        string     `json:"status"`
+	ReworkComment *string    `json:"rework_comment"`
+	CreatedAt     time.Time  `json:"created_at"`
+	UpdatedAt     time.Time  `json:"updated_at"`
+	CreatorName   *string    `json:"creator_name"`
+	AssigneeName  *string    `json:"assignee_name"`
+	DeptNameRu    string     `json:"dept_name_ru"`
+	DeptCode      string     `json:"dept_code"`
 }
 
 func (q *Queries) ListAllTasks(ctx context.Context) ([]ListAllTasksRow, error) {
@@ -810,6 +865,7 @@ func (q *Queries) ListAllTasks(ctx context.Context) ([]ListAllTasksRow, error) {
 			&i.AssignedTo,
 			&i.DueDate,
 			&i.Status,
+			&i.ReworkComment,
 			&i.CreatedAt,
 			&i.UpdatedAt,
 			&i.CreatorName,
@@ -1463,30 +1519,31 @@ func (q *Queries) ListRequestsByUser(ctx context.Context, userID int) ([]ListReq
 }
 
 const listTasksByDepartment = `-- name: ListTasksByDepartment :many
-SELECT t.id, t.title, t.description, t.department_id, t.created_by, t.assigned_to, t.due_date, t.status, t.created_at, t.updated_at, creator.full_name AS creator_name, assignee.full_name AS assignee_name, d.name_ru AS dept_name_ru, d.code AS dept_code
+SELECT t.id, t.title, t.description, t.department_id, t.created_by, t.assigned_to, t.due_date, t.status, t.rework_comment, t.created_at, t.updated_at, creator.full_name AS creator_name, assignee.full_name AS assignee_name, d.name_ru AS dept_name_ru, d.code AS dept_code
 FROM tasks t
-JOIN users creator ON creator.id = t.created_by
-JOIN users assignee ON assignee.id = t.assigned_to
+LEFT JOIN users creator ON creator.id = t.created_by
+LEFT JOIN users assignee ON assignee.id = t.assigned_to
 JOIN departments d ON d.id = t.department_id
 WHERE t.department_id = $1
 ORDER BY t.due_date NULLS LAST, t.id DESC
 `
 
 type ListTasksByDepartmentRow struct {
-	ID           int        `json:"id"`
-	Title        string     `json:"title"`
-	Description  string     `json:"description"`
-	DepartmentID int        `json:"department_id"`
-	CreatedBy    int        `json:"created_by"`
-	AssignedTo   int        `json:"assigned_to"`
-	DueDate      *time.Time `json:"due_date"`
-	Status       string     `json:"status"`
-	CreatedAt    time.Time  `json:"created_at"`
-	UpdatedAt    time.Time  `json:"updated_at"`
-	CreatorName  string     `json:"creator_name"`
-	AssigneeName string     `json:"assignee_name"`
-	DeptNameRu   string     `json:"dept_name_ru"`
-	DeptCode     string     `json:"dept_code"`
+	ID            int        `json:"id"`
+	Title         string     `json:"title"`
+	Description   string     `json:"description"`
+	DepartmentID  int        `json:"department_id"`
+	CreatedBy     int        `json:"created_by"`
+	AssignedTo    *int       `json:"assigned_to"`
+	DueDate       *time.Time `json:"due_date"`
+	Status        string     `json:"status"`
+	ReworkComment *string    `json:"rework_comment"`
+	CreatedAt     time.Time  `json:"created_at"`
+	UpdatedAt     time.Time  `json:"updated_at"`
+	CreatorName   *string    `json:"creator_name"`
+	AssigneeName  *string    `json:"assignee_name"`
+	DeptNameRu    string     `json:"dept_name_ru"`
+	DeptCode      string     `json:"dept_code"`
 }
 
 func (q *Queries) ListTasksByDepartment(ctx context.Context, departmentID int) ([]ListTasksByDepartmentRow, error) {
@@ -1507,6 +1564,7 @@ func (q *Queries) ListTasksByDepartment(ctx context.Context, departmentID int) (
 			&i.AssignedTo,
 			&i.DueDate,
 			&i.Status,
+			&i.ReworkComment,
 			&i.CreatedAt,
 			&i.UpdatedAt,
 			&i.CreatorName,
@@ -1525,33 +1583,34 @@ func (q *Queries) ListTasksByDepartment(ctx context.Context, departmentID int) (
 }
 
 const listTasksByUser = `-- name: ListTasksByUser :many
-SELECT t.id, t.title, t.description, t.department_id, t.created_by, t.assigned_to, t.due_date, t.status, t.created_at, t.updated_at, creator.full_name AS creator_name, assignee.full_name AS assignee_name, d.name_ru AS dept_name_ru, d.code AS dept_code
+SELECT t.id, t.title, t.description, t.department_id, t.created_by, t.assigned_to, t.due_date, t.status, t.rework_comment, t.created_at, t.updated_at, creator.full_name AS creator_name, assignee.full_name AS assignee_name, d.name_ru AS dept_name_ru, d.code AS dept_code
 FROM tasks t
-JOIN users creator ON creator.id = t.created_by
-JOIN users assignee ON assignee.id = t.assigned_to
+LEFT JOIN users creator ON creator.id = t.created_by
+LEFT JOIN users assignee ON assignee.id = t.assigned_to
 JOIN departments d ON d.id = t.department_id
-WHERE t.assigned_to = $1 OR t.created_by = $1
+WHERE t.assigned_to = $1
 ORDER BY t.due_date NULLS LAST, t.id DESC
 `
 
 type ListTasksByUserRow struct {
-	ID           int        `json:"id"`
-	Title        string     `json:"title"`
-	Description  string     `json:"description"`
-	DepartmentID int        `json:"department_id"`
-	CreatedBy    int        `json:"created_by"`
-	AssignedTo   int        `json:"assigned_to"`
-	DueDate      *time.Time `json:"due_date"`
-	Status       string     `json:"status"`
-	CreatedAt    time.Time  `json:"created_at"`
-	UpdatedAt    time.Time  `json:"updated_at"`
-	CreatorName  string     `json:"creator_name"`
-	AssigneeName string     `json:"assignee_name"`
-	DeptNameRu   string     `json:"dept_name_ru"`
-	DeptCode     string     `json:"dept_code"`
+	ID            int        `json:"id"`
+	Title         string     `json:"title"`
+	Description   string     `json:"description"`
+	DepartmentID  int        `json:"department_id"`
+	CreatedBy     int        `json:"created_by"`
+	AssignedTo    *int       `json:"assigned_to"`
+	DueDate       *time.Time `json:"due_date"`
+	Status        string     `json:"status"`
+	ReworkComment *string    `json:"rework_comment"`
+	CreatedAt     time.Time  `json:"created_at"`
+	UpdatedAt     time.Time  `json:"updated_at"`
+	CreatorName   *string    `json:"creator_name"`
+	AssigneeName  *string    `json:"assignee_name"`
+	DeptNameRu    string     `json:"dept_name_ru"`
+	DeptCode      string     `json:"dept_code"`
 }
 
-func (q *Queries) ListTasksByUser(ctx context.Context, assignedTo int) ([]ListTasksByUserRow, error) {
+func (q *Queries) ListTasksByUser(ctx context.Context, assignedTo *int) ([]ListTasksByUserRow, error) {
 	rows, err := q.db.Query(ctx, listTasksByUser, assignedTo)
 	if err != nil {
 		return nil, err
@@ -1569,6 +1628,7 @@ func (q *Queries) ListTasksByUser(ctx context.Context, assignedTo int) ([]ListTa
 			&i.AssignedTo,
 			&i.DueDate,
 			&i.Status,
+			&i.ReworkComment,
 			&i.CreatedAt,
 			&i.UpdatedAt,
 			&i.CreatorName,
@@ -1802,6 +1862,21 @@ type UpdateTaskStatusParams struct {
 
 func (q *Queries) UpdateTaskStatus(ctx context.Context, arg UpdateTaskStatusParams) error {
 	_, err := q.db.Exec(ctx, updateTaskStatus, arg.ID, arg.Status)
+	return err
+}
+
+const updateTaskStatusWithComment = `-- name: UpdateTaskStatusWithComment :exec
+UPDATE tasks SET status = $2, rework_comment = $3, updated_at = now() WHERE id = $1
+`
+
+type UpdateTaskStatusWithCommentParams struct {
+	ID            int     `json:"id"`
+	Status        string  `json:"status"`
+	ReworkComment *string `json:"rework_comment"`
+}
+
+func (q *Queries) UpdateTaskStatusWithComment(ctx context.Context, arg UpdateTaskStatusWithCommentParams) error {
+	_, err := q.db.Exec(ctx, updateTaskStatusWithComment, arg.ID, arg.Status, arg.ReworkComment)
 	return err
 }
 

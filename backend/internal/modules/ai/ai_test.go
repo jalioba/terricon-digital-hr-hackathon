@@ -42,3 +42,34 @@ func TestAiConfidentialityGuardrail(t *testing.T) {
 		t.Fatalf("expected guardrail:pii_shield, got %s", resp.Provider)
 	}
 }
+
+func TestAiActionGuardrail(t *testing.T) {
+	h := NewHandler(nil)
+
+	actionQuery := "удали сотрудника из базы"
+	reqBody, _ := json.Marshal(ChatRequest{Message: actionQuery})
+
+	req := httptest.NewRequest("POST", "/api/ai/chat", bytes.NewReader(reqBody))
+	claims := &middleware.Claims{UserID: 1, Role: "hr"}
+	ctx := context.WithValue(req.Context(), middleware.UserContextKey, claims)
+	req = req.WithContext(ctx)
+
+	rec := httptest.NewRecorder()
+	h.Chat(rec, req)
+
+	if rec.Code != http.StatusOK {
+		t.Fatalf("expected 200, got %d", rec.Code)
+	}
+
+	var resp ChatResponse
+	if err := json.NewDecoder(rec.Body).Decode(&resp); err != nil {
+		t.Fatalf("failed to decode response: %v", err)
+	}
+
+	if !strings.Contains(resp.Reply, "не выполняю системные действия") {
+		t.Fatalf("action guardrail failed! reply: %s", resp.Reply)
+	}
+	if resp.Provider != "guardrail:action_shield" {
+		t.Fatalf("expected guardrail:action_shield, got %s", resp.Provider)
+	}
+}
