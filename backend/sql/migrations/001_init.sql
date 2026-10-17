@@ -71,7 +71,11 @@ CREATE TABLE IF NOT EXISTS courses (
   title_ru TEXT NOT NULL,
   title_kz TEXT NOT NULL,
   description_ru TEXT NOT NULL DEFAULT '',
-  description_kz TEXT NOT NULL DEFAULT ''
+  description_kz TEXT NOT NULL DEFAULT '',
+  track VARCHAR(50) NOT NULL DEFAULT 'job',
+  target_role VARCHAR(50) NOT NULL DEFAULT 'all',
+  department_id INT REFERENCES departments(id),
+  lessons JSONB DEFAULT '[]'
 );
 
 CREATE TABLE IF NOT EXISTS quiz_questions (

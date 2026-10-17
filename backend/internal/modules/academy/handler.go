@@ -20,6 +20,22 @@ func NewHandler(q *db.Queries) *Handler {
 	return &Handler{q: q}
 }
 
+type CourseItem struct {
+	ID            int             `json:"id"`
+	TitleRu       string          `json:"title_ru"`
+	TitleKz       string          `json:"title_kz"`
+	DescriptionRu string          `json:"description_ru"`
+	DescriptionKz string          `json:"description_kz"`
+	Track         string          `json:"track"`
+	TargetRole    string          `json:"target_role"`
+	DepartmentID  *int            `json:"department_id"`
+	Lessons       json.RawMessage `json:"lessons"`
+	Assigned      bool            `json:"assigned"`
+	Status        string          `json:"status"`
+	Progress      int             `json:"progress"`
+	Score         *int            `json:"score"`
+}
+
 func (h *Handler) ListCourses(w http.ResponseWriter, r *http.Request) {
 	c := middleware.GetClaims(r.Context())
 	if c == nil {
@@ -39,22 +55,61 @@ func (h *Handler) ListCourses(w http.ResponseWriter, r *http.Request) {
 		assignMap[a.CourseID] = a
 	}
 
-	type CourseItem struct {
-		db.Course
-		Assigned bool `json:"assigned"`
-		Progress int  `json:"progress"`
-		Score    *int `json:"score"`
-	}
-
 	var result []CourseItem
 	for _, cItem := range courses {
-		item := CourseItem{Course: cItem}
+		lessonsRaw := json.RawMessage(cItem.Lessons)
+		if len(cItem.Lessons) == 0 {
+			lessonsRaw = json.RawMessage("[]")
+		}
+
+		item := CourseItem{
+			ID:            cItem.ID,
+			TitleRu:       cItem.TitleRu,
+			TitleKz:       cItem.TitleKz,
+			DescriptionRu: cItem.DescriptionRu,
+			DescriptionKz: cItem.DescriptionKz,
+			Track:         cItem.Track,
+			TargetRole:    cItem.TargetRole,
+			DepartmentID:  cItem.DepartmentID,
+			Lessons:       lessonsRaw,
+			Status:        "not_started",
+			Progress:      0,
+		}
+
 		if a, ok := assignMap[cItem.ID]; ok {
 			item.Assigned = true
+			item.Status = a.Status
 			item.Progress = a.Progress
 			item.Score = a.Score
 		}
-		result = append(result, item)
+
+		// Filter for current user's role and department
+		// HR can see all courses
+		if c.Role == "hr" {
+			result = append(result, item)
+			continue
+		}
+
+		// Track 1 (Platform): matched by role
+		if item.Track == "platform" {
+			if item.TargetRole == c.Role || item.TargetRole == "all" {
+				result = append(result, item)
+			}
+			continue
+		}
+
+		// Track 2 (Job): matched by department AND role
+		if item.Track == "job" {
+			deptMatches := item.DepartmentID == nil || (c.DepartmentID != nil && *item.DepartmentID == *c.DepartmentID)
+			roleMatches := item.TargetRole == "all" || item.TargetRole == c.Role
+			if deptMatches && roleMatches {
+				result = append(result, item)
+			}
+		}
+	}
+
+	if result == nil {
+		result = []CourseItem{}
 	}
 
 	httputil.JSON(w, http.StatusOK, result)
@@ -105,9 +160,27 @@ func (h *Handler) GetCourse(w http.ResponseWriter, r *http.Request) {
 			OptionsKz:  q.OptionsKz,
 		})
 	}
+	if safeQ == nil {
+		safeQ = []SafeQuestion{}
+	}
+
+	lessonsRaw := json.RawMessage(course.Lessons)
+	if len(course.Lessons) == 0 {
+		lessonsRaw = json.RawMessage("[]")
+	}
 
 	httputil.JSON(w, http.StatusOK, map[string]interface{}{
-		"course":     course,
+		"course": map[string]interface{}{
+			"id":             course.ID,
+			"title_ru":       course.TitleRu,
+			"title_kz":       course.TitleKz,
+			"description_ru": course.DescriptionRu,
+			"description_kz": course.DescriptionKz,
+			"track":          course.Track,
+			"target_role":    course.TargetRole,
+			"department_id":  course.DepartmentID,
+			"lessons":        lessonsRaw,
+		},
 		"questions":  safeQ,
 		"assignment": assign,
 	})
@@ -219,4 +292,100 @@ func (h *Handler) AssignCourse(w http.ResponseWriter, r *http.Request) {
 	})
 
 	httputil.JSON(w, http.StatusOK, map[string]string{"status": "assigned"})
+}
+
+type UpdateProgressInput struct {
+	Progress int `json:"progress"`
+}
+
+func (h *Handler) UpdateProgress(w http.ResponseWriter, r *http.Request) {
+	c := middleware.GetClaims(r.Context())
+	if c == nil {
+		httputil.Error(w, http.StatusUnauthorized, "Неавторизован")
+		return
+	}
+
+	idStr := chi.URLParam(r, "id")
+	courseID, err := strconv.Atoi(idStr)
+	if err != nil {
+		httputil.Error(w, http.StatusBadRequest, "Неверный идентификатор курса")
+		return
+	}
+
+	var input UpdateProgressInput
+	if err := json.NewDecoder(r.Body).Decode(&input); err != nil {
+		httputil.Error(w, http.StatusBadRequest, "Неверный формат запроса")
+		return
+	}
+
+	if input.Progress < 0 {
+		input.Progress = 0
+	} else if input.Progress > 100 {
+		input.Progress = 100
+	}
+
+	_ = h.q.UpdateCourseProgress(r.Context(), db.UpdateCourseProgressParams{
+		CourseID: courseID,
+		UserID:   c.UserID,
+		Progress: input.Progress,
+	})
+
+	httputil.JSON(w, http.StatusOK, map[string]interface{}{
+		"course_id": courseID,
+		"progress":  input.Progress,
+	})
+}
+
+func (h *Handler) ListHrOversight(w http.ResponseWriter, r *http.Request) {
+	c := middleware.GetClaims(r.Context())
+	if c == nil || c.Role != "hr" {
+		httputil.Error(w, http.StatusForbidden, "Доступ запрещен: только HR может просматривать сводку онбординга")
+		return
+	}
+
+	list, err := h.q.ListAllUsersAcademyProgress(r.Context())
+	if err != nil {
+		httputil.Error(w, http.StatusInternalServerError, "Ошибка загрузки сводки онбординга: "+err.Error())
+		return
+	}
+	if list == nil {
+		list = []db.ListAllUsersAcademyProgressRow{}
+	}
+
+	httputil.JSON(w, http.StatusOK, list)
+}
+
+type RemindInput struct {
+	UserID   int    `json:"user_id"`
+	CourseID *int   `json:"course_id"`
+	Message  string `json:"message"`
+}
+
+func (h *Handler) RemindOnboarding(w http.ResponseWriter, r *http.Request) {
+	c := middleware.GetClaims(r.Context())
+	if c == nil || c.Role != "hr" {
+		httputil.Error(w, http.StatusForbidden, "Отправлять напоминания может только HR")
+		return
+	}
+
+	var input RemindInput
+	if err := json.NewDecoder(r.Body).Decode(&input); err != nil || input.UserID <= 0 {
+		httputil.Error(w, http.StatusBadRequest, "Неверные параметры сотрудника")
+		return
+	}
+
+	msg := input.Message
+	if msg == "" {
+		msg = "Напоминаем о необходимости завершить обязательное обучение на платформе Jana Academy."
+	}
+
+	_ = h.q.CreateNotification(r.Context(), db.CreateNotificationParams{
+		UserID:  input.UserID,
+		Kind:    "academy",
+		Title:   "Напоминание: Обучение на платформе JanaMen",
+		Message: msg,
+		Link:    "/academy",
+	})
+
+	httputil.JSON(w, http.StatusOK, map[string]string{"status": "reminder_sent"})
 }

@@ -193,6 +193,9 @@ func (h *Handler) ListMy(w http.ResponseWriter, r *http.Request) {
 		httputil.Error(w, http.StatusInternalServerError, "Ошибка загрузки ваших заявок: "+err.Error())
 		return
 	}
+	if list == nil {
+		list = []db.ListRequestsByUserRow{}
+	}
 	httputil.JSON(w, http.StatusOK, list)
 }
 
@@ -221,6 +224,9 @@ func (h *Handler) ListDepartment(w http.ResponseWriter, r *http.Request) {
 		httputil.Error(w, http.StatusInternalServerError, "Ошибка загрузки заявок отдела: "+err.Error())
 		return
 	}
+	if list == nil {
+		list = []db.ListRequestsByDepartmentRow{}
+	}
 	httputil.JSON(w, http.StatusOK, list)
 }
 
@@ -235,6 +241,9 @@ func (h *Handler) ListAll(w http.ResponseWriter, r *http.Request) {
 	if err != nil {
 		httputil.Error(w, http.StatusInternalServerError, "Ошибка загрузки списка всех заявок: "+err.Error())
 		return
+	}
+	if list == nil {
+		list = []db.ListAllRequestsRow{}
 	}
 	httputil.JSON(w, http.StatusOK, list)
 }
@@ -403,6 +412,106 @@ func (h *Handler) MakeDecision(w http.ResponseWriter, r *http.Request) {
 	})
 
 	httputil.JSON(w, http.StatusOK, updatedReq)
+}
+
+func (h *Handler) Resubmit(w http.ResponseWriter, r *http.Request) {
+	c := middleware.GetClaims(r.Context())
+	if c == nil {
+		httputil.Error(w, http.StatusUnauthorized, "Неавторизован")
+		return
+	}
+
+	idStr := chi.URLParam(r, "id")
+	var id int
+	if _, err := fmt.Sscanf(idStr, "%d", &id); err != nil {
+		httputil.Error(w, http.StatusBadRequest, "Неверный идентификатор заявки")
+		return
+	}
+
+	var req CreateRequestPayload
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		httputil.Error(w, http.StatusBadRequest, "Неверный формат запроса")
+		return
+	}
+
+	existing, err := h.q.GetRequest(r.Context(), id)
+	if err != nil {
+		httputil.Error(w, http.StatusNotFound, "Заявка не найдена")
+		return
+	}
+
+	if existing.UserID != c.UserID {
+		httputil.Error(w, http.StatusForbidden, "Вы можете редактировать только свои заявки")
+		return
+	}
+
+	if existing.Status != "revision_needed" {
+		httputil.Error(w, http.StatusBadRequest, "Повторно отправить можно только заявку, требующую доработки")
+		return
+	}
+
+	var dateFrom *time.Time
+	var dateTo *time.Time
+	var desiredDate *time.Time
+	isPaid := true
+	if req.IsPaid != nil {
+		isPaid = *req.IsPaid
+	}
+
+	user, err := h.q.GetUser(r.Context(), c.UserID)
+	if err != nil {
+		httputil.Error(w, http.StatusNotFound, "Пользователь не найден")
+		return
+	}
+
+	if existing.Type == "vacation" {
+		if req.DateFrom != nil && *req.DateFrom != "" {
+			if t, err := time.Parse("2006-01-02", *req.DateFrom); err == nil {
+				dateFrom = &t
+			}
+		}
+		if req.DateTo != nil && *req.DateTo != "" {
+			if t, err := time.Parse("2006-01-02", *req.DateTo); err == nil {
+				dateTo = &t
+			}
+		}
+		if isPaid && req.DaysCount > user.VacationDaysLeft {
+			httputil.Error(w, http.StatusBadRequest, fmt.Sprintf("Запрошено %d дней, но доступный остаток составляет %d дней", req.DaysCount, user.VacationDaysLeft))
+			return
+		}
+	} else if existing.Type == "advance" {
+		if req.DesiredDate != nil && *req.DesiredDate != "" {
+			if t, err := time.Parse("2006-01-02", *req.DesiredDate); err == nil {
+				desiredDate = &t
+			}
+		}
+	}
+
+	updated, err := h.q.ResubmitRequest(r.Context(), db.ResubmitRequestParams{
+		ID:          id,
+		DateFrom:    dateFrom,
+		DateTo:      dateTo,
+		DaysCount:   req.DaysCount,
+		IsPaid:      isPaid,
+		Amount:      req.Amount,
+		DesiredDate: desiredDate,
+		DocumentUrl: req.DocumentURL,
+		Comment:     req.Comment,
+		UserID:      c.UserID,
+	})
+	if err != nil {
+		httputil.Error(w, http.StatusInternalServerError, "Ошибка обновления заявки: "+err.Error())
+		return
+	}
+
+	_ = h.q.AddRequestHistory(r.Context(), db.AddRequestHistoryParams{
+		RequestID: id,
+		Status:    "pending",
+		ActorID:   &c.UserID,
+		Comment:   "Заявка исправлена сотрудником и повторно отправлена на согласование",
+	})
+
+	httputil.JSON(w, http.StatusOK, updated)
 }
 
 func (h *Handler) UploadDocument(w http.ResponseWriter, r *http.Request) {

@@ -22,6 +22,10 @@ type Course struct {
 	TitleKz       string `json:"title_kz"`
 	DescriptionRu string `json:"description_ru"`
 	DescriptionKz string `json:"description_kz"`
+	Track         string `json:"track"`
+	TargetRole    string `json:"target_role"`
+	DepartmentID  *int   `json:"department_id"`
+	Lessons       []byte `json:"lessons"`
 }
 
 type CourseAssignment struct {

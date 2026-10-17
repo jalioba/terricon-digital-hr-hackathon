@@ -463,7 +463,7 @@ func (q *Queries) GetAssignment(ctx context.Context, arg GetAssignmentParams) (C
 }
 
 const getCourse = `-- name: GetCourse :one
-SELECT id, title_ru, title_kz, description_ru, description_kz FROM courses WHERE id = $1
+SELECT id, title_ru, title_kz, description_ru, description_kz, track, target_role, department_id, lessons FROM courses WHERE id = $1
 `
 
 func (q *Queries) GetCourse(ctx context.Context, id int) (Course, error) {
@@ -475,6 +475,10 @@ func (q *Queries) GetCourse(ctx context.Context, id int) (Course, error) {
 		&i.TitleKz,
 		&i.DescriptionRu,
 		&i.DescriptionKz,
+		&i.Track,
+		&i.TargetRole,
+		&i.DepartmentID,
+		&i.Lessons,
 	)
 	return i, err
 }
@@ -882,6 +886,69 @@ func (q *Queries) ListAllUsers(ctx context.Context) ([]ListAllUsersRow, error) {
 	return items, nil
 }
 
+const listAllUsersAcademyProgress = `-- name: ListAllUsersAcademyProgress :many
+SELECT u.id AS user_id, u.full_name, u.position, u.role, u.department_id,
+       COALESCE(d.name_ru, 'Без отдела')::text AS dept_ru,
+       COUNT(ca.id)::int AS total_courses,
+       COUNT(ca.id) FILTER (WHERE ca.status = 'completed')::int AS completed_courses,
+       COALESCE(AVG(ca.progress), 0)::float8 AS avg_progress,
+       COALESCE(MAX(CASE WHEN c.track = 'platform' AND ca.status = 'completed' THEN 1 ELSE 0 END), 0)::int AS platform_completed,
+       COALESCE(MAX(CASE WHEN c.track = 'platform' THEN ca.score ELSE NULL END), 0)::int AS platform_score
+FROM users u
+LEFT JOIN departments d ON d.id = u.department_id
+LEFT JOIN course_assignments ca ON ca.user_id = u.id
+LEFT JOIN courses c ON c.id = ca.course_id
+WHERE u.role != 'hr'
+GROUP BY u.id, u.full_name, u.position, u.role, u.department_id, d.name_ru
+ORDER BY u.full_name
+`
+
+type ListAllUsersAcademyProgressRow struct {
+	UserID            int     `json:"user_id"`
+	FullName          string  `json:"full_name"`
+	Position          string  `json:"position"`
+	Role              string  `json:"role"`
+	DepartmentID      *int    `json:"department_id"`
+	DeptRu            string  `json:"dept_ru"`
+	TotalCourses      int     `json:"total_courses"`
+	CompletedCourses  int     `json:"completed_courses"`
+	AvgProgress       float64 `json:"avg_progress"`
+	PlatformCompleted int     `json:"platform_completed"`
+	PlatformScore     int     `json:"platform_score"`
+}
+
+func (q *Queries) ListAllUsersAcademyProgress(ctx context.Context) ([]ListAllUsersAcademyProgressRow, error) {
+	rows, err := q.db.Query(ctx, listAllUsersAcademyProgress)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []ListAllUsersAcademyProgressRow
+	for rows.Next() {
+		var i ListAllUsersAcademyProgressRow
+		if err := rows.Scan(
+			&i.UserID,
+			&i.FullName,
+			&i.Position,
+			&i.Role,
+			&i.DepartmentID,
+			&i.DeptRu,
+			&i.TotalCourses,
+			&i.CompletedCourses,
+			&i.AvgProgress,
+			&i.PlatformCompleted,
+			&i.PlatformScore,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
 const listAssignmentsByUser = `-- name: ListAssignmentsByUser :many
 SELECT a.id, a.course_id, a.user_id, a.status, a.progress, a.score, a.assigned_at, a.completed_at, c.title_ru, c.title_kz, c.description_ru, c.description_kz
 FROM course_assignments a
@@ -939,7 +1006,7 @@ func (q *Queries) ListAssignmentsByUser(ctx context.Context, userID int) ([]List
 }
 
 const listCourses = `-- name: ListCourses :many
-SELECT id, title_ru, title_kz, description_ru, description_kz FROM courses ORDER BY id
+SELECT id, title_ru, title_kz, description_ru, description_kz, track, target_role, department_id, lessons FROM courses ORDER BY id
 `
 
 func (q *Queries) ListCourses(ctx context.Context) ([]Course, error) {
@@ -957,6 +1024,10 @@ func (q *Queries) ListCourses(ctx context.Context) ([]Course, error) {
 			&i.TitleKz,
 			&i.DescriptionRu,
 			&i.DescriptionKz,
+			&i.Track,
+			&i.TargetRole,
+			&i.DepartmentID,
+			&i.Lessons,
 		); err != nil {
 			return nil, err
 		}
@@ -1595,6 +1666,83 @@ type MarkNotificationReadParams struct {
 
 func (q *Queries) MarkNotificationRead(ctx context.Context, arg MarkNotificationReadParams) error {
 	_, err := q.db.Exec(ctx, markNotificationRead, arg.ID, arg.UserID)
+	return err
+}
+
+const resubmitRequest = `-- name: ResubmitRequest :one
+UPDATE requests
+SET date_from = $2, date_to = $3, days_count = $4, is_paid = $5, amount = $6, desired_date = $7,
+    document_url = $8, comment = $9, status = 'pending', manager_comment = '', updated_at = now()
+WHERE id = $1 AND user_id = $10
+RETURNING id, type, user_id, department_id, date_from, date_to, days_count, is_paid, amount, desired_date, document_url, comment, manager_comment, status, approved_by, approved_at, created_at, updated_at
+`
+
+type ResubmitRequestParams struct {
+	ID          int        `json:"id"`
+	DateFrom    *time.Time `json:"date_from"`
+	DateTo      *time.Time `json:"date_to"`
+	DaysCount   int        `json:"days_count"`
+	IsPaid      bool       `json:"is_paid"`
+	Amount      float64    `json:"amount"`
+	DesiredDate *time.Time `json:"desired_date"`
+	DocumentUrl string     `json:"document_url"`
+	Comment     string     `json:"comment"`
+	UserID      int        `json:"user_id"`
+}
+
+func (q *Queries) ResubmitRequest(ctx context.Context, arg ResubmitRequestParams) (Request, error) {
+	row := q.db.QueryRow(ctx, resubmitRequest,
+		arg.ID,
+		arg.DateFrom,
+		arg.DateTo,
+		arg.DaysCount,
+		arg.IsPaid,
+		arg.Amount,
+		arg.DesiredDate,
+		arg.DocumentUrl,
+		arg.Comment,
+		arg.UserID,
+	)
+	var i Request
+	err := row.Scan(
+		&i.ID,
+		&i.Type,
+		&i.UserID,
+		&i.DepartmentID,
+		&i.DateFrom,
+		&i.DateTo,
+		&i.DaysCount,
+		&i.IsPaid,
+		&i.Amount,
+		&i.DesiredDate,
+		&i.DocumentUrl,
+		&i.Comment,
+		&i.ManagerComment,
+		&i.Status,
+		&i.ApprovedBy,
+		&i.ApprovedAt,
+		&i.CreatedAt,
+		&i.UpdatedAt,
+	)
+	return i, err
+}
+
+const updateCourseProgress = `-- name: UpdateCourseProgress :exec
+INSERT INTO course_assignments (course_id, user_id, status, progress)
+VALUES ($1, $2, 'in_progress', $3)
+ON CONFLICT (course_id, user_id) DO UPDATE
+SET status = CASE WHEN course_assignments.status = 'completed' THEN 'completed' ELSE 'in_progress' END,
+    progress = GREATEST(course_assignments.progress, EXCLUDED.progress)
+`
+
+type UpdateCourseProgressParams struct {
+	CourseID int `json:"course_id"`
+	UserID   int `json:"user_id"`
+	Progress int `json:"progress"`
+}
+
+func (q *Queries) UpdateCourseProgress(ctx context.Context, arg UpdateCourseProgressParams) error {
+	_, err := q.db.Exec(ctx, updateCourseProgress, arg.CourseID, arg.UserID, arg.Progress)
 	return err
 }
 

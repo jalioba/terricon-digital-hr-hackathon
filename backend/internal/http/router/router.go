@@ -73,6 +73,7 @@ func NewRouter(cfg config.Config, q *db.Queries, zup zup1c.Client, doc documento
 			p.Get("/requests/all", reqH.ListAll)
 			p.Get("/requests/{id}", reqH.Get)
 			p.Post("/requests/{id}/decision", reqH.MakeDecision)
+			p.Put("/requests/{id}/resubmit", reqH.Resubmit)
 
 			// Team & Tasks
 			p.Get("/team", teamH.ListTeam)
@@ -83,8 +84,11 @@ func NewRouter(cfg config.Config, q *db.Queries, zup zup1c.Client, doc documento
 
 			// Academy
 			p.Get("/courses", acadH.ListCourses)
+			p.Get("/courses/hr-oversight", acadH.ListHrOversight)
+			p.Post("/courses/remind", acadH.RemindOnboarding)
 			p.Get("/courses/{id}", acadH.GetCourse)
 			p.Post("/courses/{id}/quiz", acadH.SubmitQuiz)
+			p.Put("/courses/{id}/progress", acadH.UpdateProgress)
 			p.Post("/courses/assign", acadH.AssignCourse)
 
 			// Notifications

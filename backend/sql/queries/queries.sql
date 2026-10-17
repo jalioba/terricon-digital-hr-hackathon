@@ -99,6 +99,13 @@ SET status = $2, manager_comment = $3, approved_by = $4, approved_at = now(), up
 WHERE id = $1
 RETURNING *;
 
+-- name: ResubmitRequest :one
+UPDATE requests
+SET date_from = $2, date_to = $3, days_count = $4, is_paid = $5, amount = $6, desired_date = $7,
+    document_url = $8, comment = $9, status = 'pending', manager_comment = '', updated_at = now()
+WHERE id = $1 AND user_id = $10
+RETURNING *;
+
 -- name: AddRequestHistory :exec
 INSERT INTO request_history (request_id, status, actor_id, comment)
 VALUES ($1, $2, $3, $4);
@@ -169,6 +176,13 @@ UPDATE course_assignments
 SET status = 'completed', progress = 100, score = $3, completed_at = now()
 WHERE course_id = $1 AND user_id = $2;
 
+-- name: UpdateCourseProgress :exec
+INSERT INTO course_assignments (course_id, user_id, status, progress)
+VALUES ($1, $2, 'in_progress', $3)
+ON CONFLICT (course_id, user_id) DO UPDATE
+SET status = CASE WHEN course_assignments.status = 'completed' THEN 'completed' ELSE 'in_progress' END,
+    progress = GREATEST(course_assignments.progress, EXCLUDED.progress);
+
 -- name: ListAssignmentsByUser :many
 SELECT a.*, c.title_ru, c.title_kz, c.description_ru, c.description_kz
 FROM course_assignments a
@@ -185,6 +199,22 @@ FROM users u
 LEFT JOIN course_assignments ca ON ca.user_id = u.id
 WHERE u.department_id = $1
 GROUP BY u.id, u.full_name, u.position
+ORDER BY u.full_name;
+
+-- name: ListAllUsersAcademyProgress :many
+SELECT u.id AS user_id, u.full_name, u.position, u.role, u.department_id,
+       COALESCE(d.name_ru, 'Без отдела')::text AS dept_ru,
+       COUNT(ca.id)::int AS total_courses,
+       COUNT(ca.id) FILTER (WHERE ca.status = 'completed')::int AS completed_courses,
+       COALESCE(AVG(ca.progress), 0)::float8 AS avg_progress,
+       COALESCE(MAX(CASE WHEN c.track = 'platform' AND ca.status = 'completed' THEN 1 ELSE 0 END), 0)::int AS platform_completed,
+       COALESCE(MAX(CASE WHEN c.track = 'platform' THEN ca.score ELSE NULL END), 0)::int AS platform_score
+FROM users u
+LEFT JOIN departments d ON d.id = u.department_id
+LEFT JOIN course_assignments ca ON ca.user_id = u.id
+LEFT JOIN courses c ON c.id = ca.course_id
+WHERE u.role != 'hr'
+GROUP BY u.id, u.full_name, u.position, u.role, u.department_id, d.name_ru
 ORDER BY u.full_name;
 
 -- name: CreateNotification :exec
