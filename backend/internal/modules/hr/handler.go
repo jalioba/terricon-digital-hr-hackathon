@@ -3,9 +3,11 @@ package hr
 import (
 	"encoding/json"
 	"net/http"
+	"strconv"
 	"strings"
 	"time"
 
+	"github.com/go-chi/chi/v5"
 	"github.com/kilcdevs/janamen/internal/config"
 	"github.com/kilcdevs/janamen/internal/db"
 	"github.com/kilcdevs/janamen/internal/http/httputil"
@@ -193,5 +195,48 @@ func (h *Handler) GetAnalytics(w http.ResponseWriter, r *http.Request) {
 		"requests_by_status": statusStats,
 		"departments":        deptStats,
 		"approvals_audit":    auditList,
+	})
+}
+
+func (h *Handler) DeleteEmployee(w http.ResponseWriter, r *http.Request) {
+	claims := middleware.GetClaims(r.Context())
+	if claims == nil {
+		httputil.Error(w, http.StatusUnauthorized, "Не авторизован")
+		return
+	}
+
+	if claims.Role != "hr" {
+		httputil.Error(w, http.StatusForbidden, "Доступ запрещен: только HR-менеджер может удалять сотрудников и руководителей")
+		return
+	}
+
+	idStr := chi.URLParam(r, "id")
+	targetID, err := strconv.Atoi(idStr)
+	if err != nil {
+		httputil.Error(w, http.StatusBadRequest, "Неверный ID сотрудника")
+		return
+	}
+
+	if targetID == claims.UserID {
+		httputil.Error(w, http.StatusBadRequest, "Нельзя удалить собственный профиль HR-директора")
+		return
+	}
+
+	targetUser, err := h.q.GetUser(r.Context(), targetID)
+	if err != nil {
+		httputil.Error(w, http.StatusNotFound, "Сотрудник не найден")
+		return
+	}
+
+	if err := h.q.DeleteUser(r.Context(), targetID); err != nil {
+		httputil.Error(w, http.StatusInternalServerError, "Ошибка при удалении профиля: "+err.Error())
+		return
+	}
+
+	httputil.JSON(w, http.StatusOK, map[string]interface{}{
+		"success":      true,
+		"deleted_id":   targetID,
+		"deleted_name": targetUser.FullName,
+		"message":      "Сотрудник " + targetUser.FullName + " успешно удален из системы",
 	})
 }

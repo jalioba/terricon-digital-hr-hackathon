@@ -80,6 +80,7 @@ func NewRouter(cfg config.Config, q *db.Queries, zup zup1c.Client, doc documento
 			p.Get("/team/academy-progress", teamH.GetAcademyProgress)
 			p.Get("/tasks", teamH.ListTasks)
 			p.Post("/tasks", teamH.CreateTask)
+			p.Put("/tasks/{id}/assign", teamH.AssignTask)
 			p.Put("/tasks/{id}/status", teamH.UpdateTaskStatus)
 
 			// Academy
@@ -112,6 +113,7 @@ func NewRouter(cfg config.Config, q *db.Queries, zup zup1c.Client, doc documento
 				hrGroup.Use(middleware.RequireRole("hr", "manager"))
 				hrGroup.Post("/hr/employees", hrH.CreateEmployee)
 				hrGroup.Get("/hr/employees", hrH.ListEmployees)
+				hrGroup.Delete("/hr/employees/{id}", hrH.DeleteEmployee)
 				hrGroup.Get("/hr/analytics", hrH.GetAnalytics)
 			})
 		})

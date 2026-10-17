@@ -138,7 +138,7 @@ func (h *Handler) ListTasks(w http.ResponseWriter, r *http.Request) {
 		httputil.JSON(w, http.StatusOK, tasks)
 
 	default: // employee
-		tasks, err := h.q.ListTasksByUser(r.Context(), c.UserID)
+		tasks, err := h.q.ListTasksByUser(r.Context(), &c.UserID)
 		if err != nil {
 			httputil.Error(w, http.StatusInternalServerError, err.Error())
 			return
@@ -151,16 +151,22 @@ func (h *Handler) ListTasks(w http.ResponseWriter, r *http.Request) {
 }
 
 type CreateTaskInput struct {
-	AssigneeID  int     `json:"assignee_id"`
-	Title       string  `json:"title"`
-	Description string  `json:"description"`
-	DueDate     *string `json:"due_date"`
+	DepartmentID int     `json:"department_id"`
+	AssigneeID   *int    `json:"assignee_id"`
+	Title        string  `json:"title"`
+	Description  string  `json:"description"`
+	DueDate      *string `json:"due_date"`
 }
 
 func (h *Handler) CreateTask(w http.ResponseWriter, r *http.Request) {
 	c := middleware.GetClaims(r.Context())
 	if c == nil {
 		httputil.Error(w, http.StatusUnauthorized, "Неавторизован")
+		return
+	}
+
+	if c.Role == "employee" {
+		httputil.Error(w, http.StatusForbidden, "Сотрудники не могут создавать новые задачи для отделов")
 		return
 	}
 
@@ -176,30 +182,34 @@ func (h *Handler) CreateTask(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// Default assignee to self if not specified
-	if input.AssigneeID <= 0 {
-		input.AssigneeID = c.UserID
-	}
+	var deptID int
+	var assignedTo *int
 
-	assignee, err := h.q.GetUser(r.Context(), input.AssigneeID)
-	if err != nil {
-		httputil.Error(w, http.StatusNotFound, "Исполнитель не найден")
-		return
-	}
-
-	deptID := 1
-	if c.Role == "manager" {
-		if c.DepartmentID == nil || assignee.DepartmentID == nil || *assignee.DepartmentID != *c.DepartmentID {
-			httputil.Error(w, http.StatusForbidden, "Руководитель может назначать задачи только сотрудникам своего подразделения")
+	if c.Role == "hr" {
+		// HR manager создает задачи и отправляет их по отделам
+		if input.DepartmentID > 0 {
+			deptID = input.DepartmentID
+		} else {
+			deptID = 1
+		}
+		// Исполнитель первоначально не назначен — руководитель отдела назначит его
+		assignedTo = nil
+	} else if c.Role == "manager" {
+		if c.DepartmentID == nil {
+			httputil.Error(w, http.StatusBadRequest, "Руководитель не привязан к подразделению")
 			return
 		}
 		deptID = *c.DepartmentID
-	} else if c.Role == "employee" {
-		if c.DepartmentID != nil {
-			deptID = *c.DepartmentID
+
+		// Руководитель может сразу выбрать работника только из своего отдела
+		if input.AssigneeID != nil && *input.AssigneeID > 0 {
+			assignee, err := h.q.GetUser(r.Context(), *input.AssigneeID)
+			if err != nil || assignee.DepartmentID == nil || *assignee.DepartmentID != deptID || assignee.Role != "employee" {
+				httputil.Error(w, http.StatusForbidden, "Руководитель может выбирать работников только своего отдела")
+				return
+			}
+			assignedTo = &assignee.ID
 		}
-	} else if assignee.DepartmentID != nil {
-		deptID = *assignee.DepartmentID
 	}
 
 	var dueDate *time.Time
@@ -214,7 +224,7 @@ func (h *Handler) CreateTask(w http.ResponseWriter, r *http.Request) {
 		Description:  input.Description,
 		DepartmentID: deptID,
 		CreatedBy:    c.UserID,
-		AssignedTo:   assignee.ID,
+		AssignedTo:   assignedTo,
 		DueDate:      dueDate,
 		Status:       "todo",
 	})
@@ -223,19 +233,112 @@ func (h *Handler) CreateTask(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	_ = h.q.CreateNotification(r.Context(), db.CreateNotificationParams{
-		UserID:  assignee.ID,
-		Kind:    "task",
-		Title:   "Вам назначена новая задача: " + input.Title,
-		Message: input.Description,
-		Link:    "/tasks",
-	})
+	// Уведомления
+	if c.Role == "hr" {
+		// Оповещаем руководителя отдела о новой поступившей задаче
+		deptUsers, _ := h.q.ListUsersByDepartment(r.Context(), &deptID)
+		for _, u := range deptUsers {
+			if u.Role == "manager" {
+				_ = h.q.CreateNotification(r.Context(), db.CreateNotificationParams{
+					UserID:  u.ID,
+					Kind:    "task",
+					Title:   "Новая задача для отдела от HR: " + input.Title,
+					Message: "HR-менеджер направил задачу в ваше подразделение. Выберите исполнителя из сотрудников отдела в разделе «К выполнению».",
+					Link:    "/tasks",
+				})
+			}
+		}
+	} else if assignedTo != nil {
+		_ = h.q.CreateNotification(r.Context(), db.CreateNotificationParams{
+			UserID:  *assignedTo,
+			Kind:    "task",
+			Title:   "Вам назначена новая задача: " + input.Title,
+			Message: "Руководитель назначил вас исполнителем задачи.",
+			Link:    "/tasks",
+		})
+	}
 
 	httputil.JSON(w, http.StatusCreated, task)
 }
 
+type AssignTaskInput struct {
+	AssigneeID int `json:"assignee_id"`
+}
+
+func (h *Handler) AssignTask(w http.ResponseWriter, r *http.Request) {
+	c := middleware.GetClaims(r.Context())
+	if c == nil {
+		httputil.Error(w, http.StatusUnauthorized, "Неавторизован")
+		return
+	}
+
+	if c.Role != "manager" && c.Role != "hr" {
+		httputil.Error(w, http.StatusForbidden, "Назначать исполнителей могут только руководитель или HR")
+		return
+	}
+
+	idStr := chi.URLParam(r, "id")
+	id, err := strconv.Atoi(idStr)
+	if err != nil {
+		httputil.Error(w, http.StatusBadRequest, "Неверный идентификатор задачи")
+		return
+	}
+
+	var input AssignTaskInput
+	if err := json.NewDecoder(r.Body).Decode(&input); err != nil {
+		httputil.Error(w, http.StatusBadRequest, "Неверный формат запроса")
+		return
+	}
+
+	task, err := h.q.GetTask(r.Context(), id)
+	if err != nil {
+		httputil.Error(w, http.StatusNotFound, "Задача не найдена")
+		return
+	}
+
+	assignee, err := h.q.GetUser(r.Context(), input.AssigneeID)
+	if err != nil {
+		httputil.Error(w, http.StatusNotFound, "Выбранный сотрудник не найден")
+		return
+	}
+
+	if c.Role == "manager" {
+		if c.DepartmentID == nil || task.DepartmentID != *c.DepartmentID {
+			httputil.Error(w, http.StatusForbidden, "Руководитель может управлять задачами только своего отдела")
+			return
+		}
+		if assignee.DepartmentID == nil || *assignee.DepartmentID != *c.DepartmentID || assignee.Role != "employee" {
+			httputil.Error(w, http.StatusForbidden, "Руководитель может выбирать работников только своего отдела")
+			return
+		}
+	}
+
+	if err := h.q.AssignTask(r.Context(), db.AssignTaskParams{
+		ID:         task.ID,
+		AssignedTo: &assignee.ID,
+	}); err != nil {
+		httputil.Error(w, http.StatusInternalServerError, "Ошибка назначения исполнителя: "+err.Error())
+		return
+	}
+
+	_ = h.q.CreateNotification(r.Context(), db.CreateNotificationParams{
+		UserID:  assignee.ID,
+		Kind:    "task",
+		Title:   "Вам назначена новая задача: " + task.Title,
+		Message: "Руководитель назначил вас исполнителем задачи. Задача доступна во вкладке «Мои задачи».",
+		Link:    "/tasks",
+	})
+
+	httputil.JSON(w, http.StatusOK, map[string]interface{}{
+		"success":     true,
+		"task_id":     task.ID,
+		"assigned_to": assignee.ID,
+	})
+}
+
 type UpdateTaskStatusInput struct {
-	Status string `json:"status"` // todo, in_progress, done
+	Status        string  `json:"status"` // todo, in_progress, review, done
+	ReworkComment *string `json:"rework_comment"`
 }
 
 func (h *Handler) UpdateTaskStatus(w http.ResponseWriter, r *http.Request) {
@@ -259,8 +362,8 @@ func (h *Handler) UpdateTaskStatus(w http.ResponseWriter, r *http.Request) {
 	}
 
 	input.Status = strings.TrimSpace(strings.ToLower(input.Status))
-	if input.Status != "todo" && input.Status != "in_progress" && input.Status != "done" {
-		httputil.Error(w, http.StatusBadRequest, "Статус должен быть 'todo', 'in_progress' или 'done'")
+	if input.Status != "todo" && input.Status != "in_progress" && input.Status != "review" && input.Status != "done" {
+		httputil.Error(w, http.StatusBadRequest, "Недопустимый статус задачи. Допустимы: todo, in_progress, review, done")
 		return
 	}
 
@@ -270,27 +373,91 @@ func (h *Handler) UpdateTaskStatus(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// Verify permission: assignee, department manager, or HR
-	if c.Role == "employee" && task.AssignedTo != c.UserID {
-		httputil.Error(w, http.StatusForbidden, "Вы можете менять статус только своих задач")
-		return
-	}
-	if c.Role == "manager" && task.AssignedTo != c.UserID {
+	switch c.Role {
+	case "employee":
+		if task.AssignedTo == nil || *task.AssignedTo != c.UserID {
+			httputil.Error(w, http.StatusForbidden, "Вы можете менять статус только своих задач")
+			return
+		}
+		// Работник может переводить:
+		// 1. из "todo" в "in_progress" (Начать задачу)
+		// 2. из "in_progress" в "review" (Задача готова / Отправить руководителю)
+		if input.Status == "in_progress" {
+			// Начать задачу
+		} else if input.Status == "review" {
+			// Отправить руководителю на проверку
+			deptUsers, _ := h.q.ListUsersByDepartment(r.Context(), &task.DepartmentID)
+			for _, u := range deptUsers {
+				if u.Role == "manager" {
+					_ = h.q.CreateNotification(r.Context(), db.CreateNotificationParams{
+						UserID:  u.ID,
+						Kind:    "task",
+						Title:   "Задача на проверке: " + task.Title,
+						Message: "Сотрудник " + c.FullName + " завершил выполнение и отправил задачу на проверку.",
+						Link:    "/tasks",
+					})
+				}
+			}
+		} else {
+			httputil.Error(w, http.StatusForbidden, "Работник может только начать задачу ('В работе') или отправить её на проверку руководителю ('На проверке')")
+			return
+		}
+
+	case "manager":
 		if c.DepartmentID == nil || task.DepartmentID != *c.DepartmentID {
 			httputil.Error(w, http.StatusForbidden, "Руководитель может управлять задачами только своего отдела")
 			return
 		}
+		if input.Status == "done" {
+			// Руководитель подтверждает задачу
+			if task.AssignedTo != nil {
+				_ = h.q.CreateNotification(r.Context(), db.CreateNotificationParams{
+					UserID:  *task.AssignedTo,
+					Kind:    "task",
+					Title:   "Задача подтверждена: " + task.Title,
+					Message: "Руководитель " + c.FullName + " подтвердил успешное выполнение задачи.",
+					Link:    "/tasks",
+				})
+			}
+		} else if input.Status == "in_progress" || input.Status == "todo" {
+			// Руководитель отправляет на перевыполнение (доработку)
+			reworkMsg := "Руководитель отправил задачу на перевыполнение."
+			if input.ReworkComment != nil && strings.TrimSpace(*input.ReworkComment) != "" {
+				reworkMsg = *input.ReworkComment
+			}
+			if task.AssignedTo != nil {
+				_ = h.q.CreateNotification(r.Context(), db.CreateNotificationParams{
+					UserID:  *task.AssignedTo,
+					Kind:    "task",
+					Title:   "Задача отправлена на перевыполнение: " + task.Title,
+					Message: reworkMsg,
+					Link:    "/tasks",
+				})
+			}
+		}
+
+	case "hr":
+		// HR имеет право наблюдения и административного управления
 	}
 
-	if err := h.q.UpdateTaskStatus(r.Context(), db.UpdateTaskStatusParams{
-		ID:     task.ID,
-		Status: input.Status,
+	reworkComment := ""
+	if input.ReworkComment != nil {
+		reworkComment = strings.TrimSpace(*input.ReworkComment)
+	}
+
+	if err := h.q.UpdateTaskStatusWithComment(r.Context(), db.UpdateTaskStatusWithCommentParams{
+		ID:            task.ID,
+		Status:        input.Status,
+		ReworkComment: &reworkComment,
 	}); err != nil {
 		httputil.Error(w, http.StatusInternalServerError, "Ошибка обновления статуса задачи: "+err.Error())
 		return
 	}
 
-	httputil.JSON(w, http.StatusOK, map[string]string{"status": input.Status})
+	httputil.JSON(w, http.StatusOK, map[string]interface{}{
+		"status":         input.Status,
+		"rework_comment": reworkComment,
+	})
 }
 
 func (h *Handler) GetAcademyProgress(w http.ResponseWriter, r *http.Request) {
