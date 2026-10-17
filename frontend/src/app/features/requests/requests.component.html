@@ -1,0 +1,988 @@
+<div class="requests-page">
+  <!-- Top Navigation & Summary Toolbar -->
+  <div class="requests-top-bar">
+    <div class="bar-left">
+      <div class="page-title-group">
+        <h1 class="page-title">Заявления и отпуска</h1>
+        <div class="vacation-pill" title="Ваш доступный остаток оплачиваемого отпуска">
+          <app-icon name="calendar" [size]="14"></app-icon>
+          <span>Остаток отпуска: <strong>{{ vacationBalance() }} дн.</strong></span>
+        </div>
+      </div>
+    </div>
+
+    <!-- Actions Group -->
+    <div class="bar-right">
+      <button
+        type="button"
+        class="btn-refresh"
+        (click)="loadData()"
+        [disabled]="isLoading()"
+        title="Синхронизировать данные"
+      >
+        <span class="spinner-green spinner-sm" *ngIf="isLoading()"></span>
+        <app-icon name="rotate-ccw" [size]="14" *ngIf="!isLoading()"></app-icon>
+        <span>{{ isLoading() ? 'Обновление...' : 'Обновить' }}</span>
+      </button>
+
+      <button
+        type="button"
+        class="btn-secondary-action"
+        (click)="openNewRequestModal('advance')"
+      >
+        <app-icon name="wallet" [size]="16"></app-icon>
+        <span>Запросить аванс</span>
+      </button>
+
+      <button
+        type="button"
+        class="btn-primary-action"
+        (click)="openNewRequestModal('vacation')"
+      >
+        <app-icon name="calendar" [size]="16"></app-icon>
+        <span>Подать на отпуск</span>
+      </button>
+    </div>
+  </div>
+
+  <!-- Success Notification Banner -->
+  <div class="alert alert-success" *ngIf="actionSuccess()">
+    <app-icon name="check-circle" [size]="18"></app-icon>
+    <span>{{ actionSuccess() }}</span>
+  </div>
+
+  <!-- KPI Metrics Cards -->
+  <div class="metrics-grid">
+    <div class="metric-card card-vacation">
+      <div class="metric-content">
+        <span class="metric-label">Баланс отпуска</span>
+        <div class="metric-val-group">
+          <span class="metric-val">{{ vacationBalance() }}</span>
+          <span class="metric-sub">/ 24 дня в год</span>
+        </div>
+        <div class="metric-progress-bar">
+          <div
+            class="metric-progress-fill"
+            [style.width.%]="(vacationBalance() / 24) * 100"
+          ></div>
+        </div>
+      </div>
+      <div class="metric-icon">
+        <app-icon name="calendar" [size]="24"></app-icon>
+      </div>
+    </div>
+
+    <div class="metric-card card-pending">
+      <div class="metric-content">
+        <span class="metric-label">На рассмотрении</span>
+        <div class="metric-val-group">
+          <span class="metric-val">
+            {{ activeTab() === 'my' ? myPendingCount() : (activeTab() === 'department' ? deptPendingCount() : allPendingCount()) }}
+          </span>
+          <span class="metric-sub">заявок</span>
+        </div>
+        <span class="metric-hint">Ожидают решения руководства</span>
+      </div>
+      <div class="metric-icon">
+        <app-icon name="clock" [size]="24"></app-icon>
+      </div>
+    </div>
+
+    <div class="metric-card card-revision" *ngIf="myRevisionCount() > 0 && activeTab() === 'my'">
+      <div class="metric-content">
+        <span class="metric-label">Требуют доработки</span>
+        <div class="metric-val-group">
+          <span class="metric-val text-amber">{{ myRevisionCount() }}</span>
+          <span class="metric-sub">заявки</span>
+        </div>
+        <span class="metric-hint">Возвращены руководителем</span>
+      </div>
+      <div class="metric-icon icon-amber">
+        <app-icon name="alert-triangle" [size]="24"></app-icon>
+      </div>
+    </div>
+
+    <div class="metric-card card-dept-flow" *ngIf="isManager() || isHr()">
+      <div class="metric-content">
+        <span class="metric-label">Согласование отдела</span>
+        <div class="metric-val-group">
+          <span class="metric-val">{{ deptPendingCount() }}</span>
+          <span class="metric-sub">ждут согласования</span>
+        </div>
+        <span class="metric-hint">Сотрудники вашего подразделения</span>
+      </div>
+      <div class="metric-icon">
+        <app-icon name="users" [size]="24"></app-icon>
+      </div>
+    </div>
+  </div>
+
+  <!-- Role Tabs & Filter Controls -->
+  <div class="tabs-and-filters-container">
+    <div class="role-tabs">
+      <button
+        type="button"
+        class="role-tab"
+        [class.active]="activeTab() === 'my'"
+        (click)="switchTab('my')"
+      >
+        <app-icon name="file-text" [size]="16"></app-icon>
+        <span>Мои заявки</span>
+        <span class="tab-badge" *ngIf="myRequests().length">{{ myRequests().length }}</span>
+      </button>
+
+      <button
+        type="button"
+        class="role-tab"
+        *ngIf="isManager() || isHr()"
+        [class.active]="activeTab() === 'department'"
+        (click)="switchTab('department')"
+      >
+        <app-icon name="users" [size]="16"></app-icon>
+        <span>Согласование заявок отдела</span>
+        <span class="tab-badge badge-pending" *ngIf="deptPendingCount() > 0">
+          {{ deptPendingCount() }}
+        </span>
+      </button>
+
+      <button
+        type="button"
+        class="role-tab"
+        *ngIf="isHr()"
+        [class.active]="activeTab() === 'all'"
+        (click)="switchTab('all')"
+      >
+        <app-icon name="shield" [size]="16"></app-icon>
+        <span>Все заявки компании</span>
+        <span class="tab-badge" *ngIf="allRequests().length">{{ allRequests().length }}</span>
+      </button>
+    </div>
+
+    <!-- Filters Section -->
+    <div class="filters-bar">
+      <!-- Search Input -->
+      <div class="search-box">
+        <app-icon name="search" [size]="16" extraClass="search-icon"></app-icon>
+        <input
+          type="text"
+          placeholder="Поиск по ФИО, номеру, комментарию..."
+          [ngModel]="searchQuery()"
+          (ngModelChange)="searchQuery.set($event)"
+        />
+        <button
+          *ngIf="searchQuery()"
+          type="button"
+          class="clear-search-btn"
+          (click)="searchQuery.set('')"
+        >
+          <app-icon name="x" [size]="14"></app-icon>
+        </button>
+      </div>
+
+      <!-- Type Filter -->
+      <div class="filter-group">
+        <select
+          [ngModel]="typeFilter()"
+          (ngModelChange)="typeFilter.set($event)"
+          class="filter-select"
+        >
+          <option value="all">Все типы документов</option>
+          <option value="vacation">🏖️ Заявления на отпуск</option>
+          <option value="advance">💰 Заявления на аванс</option>
+        </select>
+      </div>
+
+      <!-- Status Filter -->
+      <div class="filter-group">
+        <select
+          [ngModel]="statusFilter()"
+          (ngModelChange)="statusFilter.set($event)"
+          class="filter-select"
+        >
+          <option value="all">Все статусы</option>
+          <option value="pending">⏳ На рассмотрении</option>
+          <option value="approved">✅ Согласовано</option>
+          <option value="revision_needed">⚠️ Требует доработки</option>
+          <option value="rejected">❌ Отклонено</option>
+        </select>
+      </div>
+
+      <!-- Department Filter (for HR in All tab) -->
+      <div class="filter-group" *ngIf="activeTab() === 'all'">
+        <select
+          [ngModel]="selectedDeptFilter()"
+          (ngModelChange)="selectedDeptFilter.set($event)"
+          class="filter-select"
+        >
+          <option value="all">Все подразделения</option>
+          <option *ngFor="let d of departments()" [value]="d.id">
+            {{ d.name_ru }}
+          </option>
+        </select>
+      </div>
+    </div>
+  </div>
+
+  <!-- Loading State -->
+  <div class="loading-state" *ngIf="isLoading()">
+    <app-loading text="Загрузка реестра заявок..."></app-loading>
+  </div>
+
+  <!-- Empty State -->
+  <div class="empty-state" *ngIf="!isLoading() && filteredRequests().length === 0">
+    <div class="empty-icon-wrap">
+      <app-icon name="file-text" [size]="48"></app-icon>
+    </div>
+    <h3>Заявок не найдено</h3>
+    <p *ngIf="activeTab() === 'my'">
+      У вас пока нет поданных заявлений. Вы можете подать заявление на ежегодный отпуск или запросить аванс.
+    </p>
+    <p *ngIf="activeTab() === 'department'">
+      В вашем отделе нет заявок, соответствующих выбранным критериям.
+    </p>
+    <p *ngIf="activeTab() === 'all'">
+      По заданным фильтрам заявлений не обнаружено.
+    </p>
+    <div class="empty-actions" *ngIf="activeTab() === 'my'">
+      <button type="button" class="btn-primary-action" (click)="openNewRequestModal('vacation')">
+        <app-icon name="calendar" [size]="16"></app-icon>
+        <span>Подать заявку на отпуск</span>
+      </button>
+    </div>
+  </div>
+
+  <!-- Requests Table View -->
+  <div class="table-container" *ngIf="!isLoading() && filteredRequests().length > 0">
+    <table class="requests-table">
+      <thead>
+        <tr>
+          <th style="width: 100px;">№ Документа</th>
+          <th>Сотрудник / Должность</th>
+          <th>Тип заявления</th>
+          <th>Период / Параметры</th>
+          <th>Форма подачи</th>
+          <th>Статус</th>
+          <th>Согласующий</th>
+          <th style="width: 180px; text-align: right;">Действия</th>
+        </tr>
+      </thead>
+      <tbody>
+        <tr
+          *ngFor="let req of filteredRequests()"
+          [class.row-revision]="req.status === 'revision_needed' && req.user_id === currentUser()?.id"
+        >
+          <!-- Number / ID -->
+          <td>
+            <span class="req-id">REQ-{{ req.id }}</span>
+            <div class="req-date">{{ formatDate(req.created_at) }}</div>
+          </td>
+
+          <!-- Employee details -->
+          <td>
+            <div class="employee-cell">
+              <span class="employee-name">{{ req.user_name || currentUser()?.full_name }}</span>
+              <span class="employee-dept">
+                {{ req.user_position || currentUser()?.position }} • {{ req.dept_ru || currentUser()?.dept_ru }}
+              </span>
+            </div>
+          </td>
+
+          <!-- Type -->
+          <td>
+            <div class="type-pill" [class.type-vacation]="req.type === 'vacation'" [class.type-advance]="req.type === 'advance'">
+              <app-icon [name]="req.type === 'vacation' ? 'calendar' : 'wallet'" [size]="14"></app-icon>
+              <span>{{ req.type === 'vacation' ? (req.is_paid ? 'Оплачиваемый отпуск' : 'Без сохранения ЗП') : 'Аванс в счет ЗП' }}</span>
+            </div>
+          </td>
+
+          <!-- Period or Amount Details -->
+          <td>
+            <div class="details-cell" *ngIf="req.type === 'vacation'">
+              <div class="period-text">
+                {{ formatDate(req.date_from) }} — {{ formatDate(req.date_to) }}
+              </div>
+              <div class="days-badge">
+                <strong>{{ req.days_count }}</strong> кал. дн.
+              </div>
+            </div>
+            <div class="details-cell" *ngIf="req.type === 'advance'">
+              <div class="amount-text">
+                {{ formatCurrency(req.amount) }}
+              </div>
+              <div class="period-text">
+                к {{ formatDate(req.desired_date) }}
+              </div>
+            </div>
+          </td>
+
+          <!-- Filing Mode (Form vs Attachment) -->
+          <td>
+            <div class="filing-mode-cell">
+              <a
+                *ngIf="req.document_url"
+                [href]="req.document_url"
+                target="_blank"
+                class="attachment-link"
+                title="Открыть прикрепленный файл / скан заявления"
+              >
+                <app-icon name="paperclip" [size]="14"></app-icon>
+                <span>Скан заявления</span>
+              </a>
+              <span *ngIf="!req.document_url" class="form-tag">
+                <app-icon name="file-text" [size]="13"></app-icon>
+                <span>Эл. форма</span>
+              </span>
+            </div>
+          </td>
+
+          <!-- Status -->
+          <td>
+            <div class="status-badge-wrap">
+              <span
+                class="status-badge"
+                [class.status-pending]="req.status === 'pending'"
+                [class.status-approved]="req.status === 'approved'"
+                [class.status-revision]="req.status === 'revision_needed'"
+                [class.status-rejected]="req.status === 'rejected'"
+              >
+                <app-icon
+                  [name]="
+                    req.status === 'approved' ? 'check-circle' :
+                    (req.status === 'revision_needed' ? 'alert-triangle' :
+                    (req.status === 'rejected' ? 'x-circle' : 'clock'))
+                  "
+                  [size]="13"
+                ></app-icon>
+                <span>
+                  {{
+                    req.status === 'approved' ? 'Согласовано' :
+                    (req.status === 'revision_needed' ? 'На доработке' :
+                    (req.status === 'rejected' ? 'Отклонено' : 'На рассмотрении'))
+                  }}
+                </span>
+              </span>
+
+              <!-- Revision Note Teaser -->
+              <div class="revision-note-teaser" *ngIf="req.status === 'revision_needed' && req.manager_comment">
+                «{{ req.manager_comment }}»
+              </div>
+            </div>
+          </td>
+
+          <!-- Approver -->
+          <td>
+            <span class="approver-text">{{ req.approver_name || '—' }}</span>
+          </td>
+
+          <!-- Actions -->
+          <td style="text-align: right;">
+            <div class="actions-cell">
+              <!-- Employee Resubmit Button -->
+              <button
+                type="button"
+                class="btn-resubmit-action"
+                *ngIf="req.status === 'revision_needed' && req.user_id === currentUser()?.id"
+                (click)="openResubmitModal(req)"
+                title="Исправить замечания и отправить повторно"
+              >
+                <app-icon name="rotate-ccw" [size]="13"></app-icon>
+                <span>Исправить</span>
+              </button>
+
+              <!-- Manager / HR Review Decision Button -->
+              <button
+                type="button"
+                class="btn-decide-action"
+                *ngIf="canApproveRequest(req)"
+                (click)="openDetailModal(req)"
+                title="Согласовать или отправить на доработку"
+              >
+                <app-icon name="check" [size]="13"></app-icon>
+                <span>Рассмотреть</span>
+              </button>
+
+              <!-- View Details Button -->
+              <button
+                type="button"
+                class="btn-view-details"
+                (click)="openDetailModal(req)"
+                title="Посмотреть карточку документа и историю"
+              >
+                <app-icon name="eye" [size]="14"></app-icon>
+              </button>
+            </div>
+          </td>
+        </tr>
+      </tbody>
+    </table>
+  </div>
+
+  <!-- ========================================================
+       MODAL 1: FILING / RESUBMISSION MODAL (Form vs Scan File)
+       ======================================================== -->
+  <div class="modal-overlay" *ngIf="isFilingModalOpen()" (click)="closeFilingModal()">
+    <div class="modal-content doc-filing-modal" (click)="$event.stopPropagation()">
+      <!-- Modal Header -->
+      <div class="modal-header">
+        <div class="modal-header-info">
+          <div class="modal-pre-title">
+            АО «JanaPost» • Электронный документооборот
+          </div>
+          <h2 class="modal-title">
+            {{ isEditingMode() ? 'Доработка заявления №REQ-' + editingRequestId() : (formType() === 'vacation' ? 'Заявление на предоставление отпуска' : 'Заявление на выдачу аванса') }}
+          </h2>
+        </div>
+        <button type="button" class="modal-close-btn" (click)="closeFilingModal()">
+          <app-icon name="x" [size]="20"></app-icon>
+        </button>
+      </div>
+
+      <!-- Revision Feedback Banner (if Resubmitting) -->
+      <div class="revision-alert-box" *ngIf="isEditingMode() && existingManagerFeedback()">
+        <div class="alert-icon">
+          <app-icon name="alert-triangle" [size]="20"></app-icon>
+        </div>
+        <div class="alert-body">
+          <div class="alert-title">Замечания руководителя к доработке:</div>
+          <div class="alert-desc">{{ existingManagerFeedback() }}</div>
+        </div>
+      </div>
+
+      <!-- Document Type Switcher (only for new requests) -->
+      <div class="doc-type-switcher" *ngIf="!isEditingMode()">
+        <button
+          type="button"
+          class="type-switch-btn"
+          [class.active]="formType() === 'vacation'"
+          (click)="formType.set('vacation')"
+        >
+          <app-icon name="calendar" [size]="16"></app-icon>
+          <span>Заявление на отпуск</span>
+        </button>
+        <button
+          type="button"
+          class="type-switch-btn"
+          [class.active]="formType() === 'advance'"
+          (click)="formType.set('advance')"
+        >
+          <app-icon name="wallet" [size]="16"></app-icon>
+          <span>Заявление на аванс</span>
+        </button>
+      </div>
+
+      <!-- Segmented Filing Mode Toggle (Form vs Attachment) -->
+      <div class="filing-mode-toggle">
+        <div class="mode-toggle-label">Способ подачи заявления:</div>
+        <div class="toggle-buttons">
+          <button
+            type="button"
+            class="mode-btn"
+            [class.active]="filingMode() === 'form'"
+            (click)="filingMode.set('form')"
+          >
+            <app-icon name="file-text" [size]="15"></app-icon>
+            <span>Электронная форма</span>
+          </button>
+          <button
+            type="button"
+            class="mode-btn"
+            [class.active]="filingMode() === 'file'"
+            (click)="filingMode.set('file')"
+          >
+            <app-icon name="paperclip" [size]="15"></app-icon>
+            <span>Прикрепить скан / фото</span>
+          </button>
+        </div>
+      </div>
+
+      <div class="modal-body doc-sheet">
+        <!-- Official Document Header Block -->
+        <div class="official-doc-header">
+          <div class="doc-header-left">
+            <div class="doc-company-name">АО «JanaPost»</div>
+            <div class="doc-dept-name">Подразделение: {{ currentUser()?.dept_ru || 'Главное управление' }}</div>
+          </div>
+          <div class="doc-header-right">
+            <div class="recipient-line">
+              {{ formType() === 'vacation' ? 'Председателю Правления АО «JanaPost»' : 'В Бухгалтерию АО «JanaPost»' }}
+            </div>
+            <div class="applicant-line">
+              от: <strong>{{ currentUser()?.full_name }}</strong>
+            </div>
+            <div class="applicant-meta">
+              Должность: {{ currentUser()?.position }} • ИИН: {{ currentUser()?.iin }}
+            </div>
+          </div>
+        </div>
+
+        <!-- ================= VACATION FIELDS ================= -->
+        <div class="doc-fields-section" *ngIf="formType() === 'vacation'">
+          <!-- Paid vs Unpaid Toggle -->
+          <div class="form-row">
+            <label class="field-label">Вид запрашиваемого отпуска:</label>
+            <div class="radio-pill-group">
+              <label class="radio-pill" [class.selected]="formIsPaid()">
+                <input
+                  type="radio"
+                  name="vacation_paid"
+                  [value]="true"
+                  [ngModel]="formIsPaid()"
+                  (ngModelChange)="formIsPaid.set(true)"
+                />
+                <span>Оплачиваемый трудовой отпуск</span>
+              </label>
+
+              <label class="radio-pill" [class.selected]="!formIsPaid()">
+                <input
+                  type="radio"
+                  name="vacation_paid"
+                  [value]="false"
+                  [ngModel]="formIsPaid()"
+                  (ngModelChange)="formIsPaid.set(false)"
+                />
+                <span>Без сохранения заработной платы (за свой счет)</span>
+              </label>
+            </div>
+          </div>
+
+          <!-- Date Range Fields -->
+          <div class="form-row date-range-row">
+            <div class="date-input-col">
+              <label class="field-label">Дата начала отпуска <span class="required">*</span></label>
+              <input
+                type="date"
+                class="form-control"
+                [ngModel]="formDateFrom()"
+                (ngModelChange)="formDateFrom.set($event)"
+              />
+            </div>
+            <div class="date-input-col">
+              <label class="field-label">Дата окончания отпуска <span class="required">*</span></label>
+              <input
+                type="date"
+                class="form-control"
+                [ngModel]="formDateTo()"
+                (ngModelChange)="formDateTo.set($event)"
+              />
+            </div>
+          </div>
+
+          <!-- Days Calculation & Balance Check Card -->
+          <div class="vacation-calc-box" [class.calc-overlimit]="isVacationOverLimit()">
+            <div class="calc-row">
+              <div class="calc-item">
+                <span class="calc-label">Запрошено дней:</span>
+                <span class="calc-value highlight-value">{{ formDaysCount() }} кал. дн.</span>
+              </div>
+              <div class="calc-item" *ngIf="formIsPaid()">
+                <span class="calc-label">Доступный остаток:</span>
+                <span class="calc-value">{{ vacationBalance() }} дн.</span>
+              </div>
+              <div class="calc-item" *ngIf="formIsPaid() && !isVacationOverLimit()">
+                <span class="calc-label">Останется после отпуска:</span>
+                <span class="calc-value text-green">{{ vacationBalance() - formDaysCount() }} дн.</span>
+              </div>
+            </div>
+
+            <!-- Overlimit Alert Banner -->
+            <div class="overlimit-warning" *ngIf="isVacationOverLimit()">
+              <app-icon name="alert-triangle" [size]="18"></app-icon>
+              <div class="warning-text">
+                <strong>Превышение доступного баланса на {{ vacationDaysDeficit() }} дн.!</strong>
+                <span>
+                  Запрошено {{ formDaysCount() }} дн., а доступный остаток составляет {{ vacationBalance() }} дн.
+                  Пожалуйста, сократите период либо выберите «Без сохранения заработной платы».
+                </span>
+              </div>
+            </div>
+          </div>
+
+          <!-- Substitute Employee -->
+          <div class="form-row">
+            <label class="field-label">Замещающий сотрудник на период отсутствия (опционально):</label>
+            <input
+              type="text"
+              class="form-control"
+              placeholder="ФИО и должность замещающего сотрудника"
+              [ngModel]="formSubstitute()"
+              (ngModelChange)="formSubstitute.set($event)"
+            />
+          </div>
+
+          <!-- Justification / Note -->
+          <div class="form-row">
+            <label class="field-label">Основание / Примечание:</label>
+            <textarea
+              class="form-control"
+              rows="2"
+              placeholder="Например: Согласно утвержденному графику отпусков на 2026 год"
+              [ngModel]="formComment()"
+              (ngModelChange)="formComment.set($event)"
+            ></textarea>
+          </div>
+        </div>
+
+        <!-- ================= ADVANCE FIELDS ================= -->
+        <div class="doc-fields-section" *ngIf="formType() === 'advance'">
+          <div class="form-row">
+            <label class="field-label">Сумма аванса (в тенге, ₸) <span class="required">*</span></label>
+            <input
+              type="number"
+              class="form-control input-amount"
+              min="10000"
+              step="5000"
+              [ngModel]="formAmount()"
+              (ngModelChange)="formAmount.set($event)"
+            />
+
+            <!-- Quick Presets -->
+            <div class="amount-presets">
+              <button type="button" class="preset-chip" (click)="setPresetAmount(50000)">50 000 ₸</button>
+              <button type="button" class="preset-chip" (click)="setPresetAmount(100000)">100 000 ₸</button>
+              <button type="button" class="preset-chip" (click)="setPresetAmount(150000)">150 000 ₸</button>
+              <button type="button" class="preset-chip" (click)="setPresetAmount(200000)">200 000 ₸</button>
+            </div>
+          </div>
+
+          <div class="form-row">
+            <label class="field-label">Желаемая дата выплаты <span class="required">*</span></label>
+            <input
+              type="date"
+              class="form-control"
+              [ngModel]="formDesiredDate()"
+              (ngModelChange)="formDesiredDate.set($event)"
+            />
+          </div>
+
+          <div class="form-row">
+            <label class="field-label">Цель / Обоснование запроса аванса:</label>
+            <textarea
+              class="form-control"
+              rows="2"
+              placeholder="Например: Непредвиденные семейные расходы, оплата лечения, приобретение проездных документов"
+              [ngModel]="formComment()"
+              (ngModelChange)="formComment.set($event)"
+            ></textarea>
+          </div>
+
+          <!-- Legal & Policy Notice -->
+          <div class="legal-notice-box">
+            <app-icon name="shield" [size]="16"></app-icon>
+            <span>
+              В соответствии с Трудовым кодексом РК и регламентом АО «JanaPost», выплата аванса производится в пределах 50% от расчетного месячного оклада и удерживается при окончательном расчете заработной платы.
+            </span>
+          </div>
+        </div>
+
+        <!-- ================= FILE ATTACHMENT SECTION (If filingMode === 'file') ================= -->
+        <div class="doc-attachment-zone" *ngIf="filingMode() === 'file'">
+          <div class="attachment-header">
+            <span class="attachment-title">Прикрепление скана или фотографии заявления</span>
+            <button
+              type="button"
+              class="btn-download-blank"
+              (click)="downloadBlankTemplate(formType())"
+              title="Распечатать или скачать пустой типовой бланк для подписи"
+            >
+              <app-icon name="printer" [size]="14"></app-icon>
+              <span>Скачать типовой бланк</span>
+            </button>
+          </div>
+
+          <div class="upload-dropzone" *ngIf="!formDocumentUrl()">
+            <input
+              type="file"
+              id="request-file-input"
+              class="file-input-hidden"
+              accept=".jpg,.jpeg,.png,.webp,.pdf"
+              (change)="onFileSelected($event)"
+            />
+            <label for="request-file-input" class="dropzone-label">
+              <app-icon name="upload" [size]="28" extraClass="upload-icon"></app-icon>
+              <span class="dropzone-text">
+                {{ isUploading() ? 'Загрузка файла в защищенное хранилище Supabase...' : 'Нажмите для выбора файла или перетащите скан сюда' }}
+              </span>
+              <span class="dropzone-hint">
+                Поддерживаются форматы: JPG, PNG, WEBP, PDF (максимум 10 МБ)
+              </span>
+            </label>
+            <div class="spinner-green" *ngIf="isUploading()"></div>
+          </div>
+
+          <!-- File Attached Card -->
+          <div class="attached-file-card" *ngIf="formDocumentUrl()">
+            <div class="file-info-left">
+              <app-icon name="paperclip" [size]="20" extraClass="file-icon"></app-icon>
+              <div class="file-text-meta">
+                <span class="file-name">{{ attachedFileName() || 'Скан_заявления.pdf' }}</span>
+                <span class="file-status text-green">✓ Загружен в облачное хранилище</span>
+              </div>
+            </div>
+
+            <div class="file-actions-right">
+              <a [href]="formDocumentUrl()" target="_blank" class="btn-preview-link">
+                <app-icon name="eye" [size]="14"></app-icon>
+                <span>Просмотреть</span>
+              </a>
+              <button type="button" class="btn-remove-file" (click)="removeAttachedFile()">
+                <app-icon name="x" [size]="14"></app-icon>
+              </button>
+            </div>
+          </div>
+        </div>
+
+        <!-- Manager Notice if Manager submits -->
+        <div class="manager-filing-notice" *ngIf="isManager()">
+          <app-icon name="users" [size]="16"></app-icon>
+          <span>
+            Заявление от руководителя структурного подразделения поступает на согласование напрямую в Департамент по управлению персоналом (HR).
+          </span>
+        </div>
+
+        <!-- Error Alert -->
+        <div class="alert alert-danger" *ngIf="actionError()">
+          <app-icon name="alert-triangle" [size]="16"></app-icon>
+          <span>{{ actionError() }}</span>
+        </div>
+      </div>
+
+      <!-- Modal Footer -->
+      <div class="modal-footer">
+        <button type="button" class="btn-cancel" (click)="closeFilingModal()">
+          Отмена
+        </button>
+        <button
+          type="button"
+          class="btn-primary-action"
+          [disabled]="isSubmitting() || isUploading() || (formType() === 'vacation' && formIsPaid() && isVacationOverLimit())"
+          (click)="submitRequest()"
+        >
+          <span class="spinner-white spinner-sm" *ngIf="isSubmitting()"></span>
+          <span>{{ isSubmitting() ? 'Отправка...' : (isEditingMode() ? 'Сохранить и отправить повторно' : 'Отправить на согласование') }}</span>
+        </button>
+      </div>
+    </div>
+  </div>
+
+  <!-- ========================================================
+       MODAL 2: INSPECTION & DECISION MODAL (Manager / HR Review)
+       ======================================================== -->
+  <div class="modal-overlay" *ngIf="isViewModalOpen()" (click)="closeDetailModal()">
+    <div class="modal-content doc-view-modal" (click)="$event.stopPropagation()">
+      <div class="modal-header">
+        <div class="modal-header-info">
+          <div class="modal-pre-title">
+            Карточка заявления • АО «JanaPost»
+          </div>
+          <h2 class="modal-title">
+            Документ №REQ-{{ selectedRequest()?.id }}
+          </h2>
+        </div>
+        <button type="button" class="modal-close-btn" (click)="closeDetailModal()">
+          <app-icon name="x" [size]="20"></app-icon>
+        </button>
+      </div>
+
+      <div class="modal-body" *ngIf="selectedRequest() as req">
+        <!-- Document Sheet Preview -->
+        <div class="doc-sheet inspection-sheet">
+          <!-- Official Paper Stamp / Watermark Header -->
+          <div class="official-header-row">
+            <div>
+              <div class="sheet-org">АО «JanaPost»</div>
+              <div class="sheet-dept">{{ req.dept_ru || 'Структурное подразделение' }}</div>
+            </div>
+            <div class="sheet-status-tag">
+              <span
+                class="status-badge"
+                [class.status-pending]="req.status === 'pending'"
+                [class.status-approved]="req.status === 'approved'"
+                [class.status-revision]="req.status === 'revision_needed'"
+                [class.status-rejected]="req.status === 'rejected'"
+              >
+                {{
+                  req.status === 'approved' ? 'СОГЛАСОВАНО' :
+                  (req.status === 'revision_needed' ? 'НА ДОРАБОТКЕ' :
+                  (req.status === 'rejected' ? 'ОТКЛОНЕНО' : 'НА РАССМОТРЕНИИ'))
+                }}
+              </span>
+            </div>
+          </div>
+
+          <div class="doc-body-title">
+            {{ req.type === 'vacation' ? 'ЗАЯВЛЕНИЕ НА ПРЕДОСТАВЛЕНИЕ ОТПУСКА' : 'ЗАЯВЛЕНИЕ НА ВЫДАЧУ АВАНСА' }}
+          </div>
+
+          <!-- Document Attributes Grid -->
+          <div class="doc-attrib-grid">
+            <div class="attrib-row">
+              <span class="attrib-label">Сотрудник (ФИО):</span>
+              <span class="attrib-val font-semibold">{{ req.user_name || currentUser()?.full_name }}</span>
+            </div>
+            <div class="attrib-row">
+              <span class="attrib-label">Должность:</span>
+              <span class="attrib-val">{{ req.user_position || currentUser()?.position }}</span>
+            </div>
+            <div class="attrib-row">
+              <span class="attrib-label">Дата подачи:</span>
+              <span class="attrib-val">{{ formatDate(req.created_at) }}</span>
+            </div>
+
+            <ng-container *ngIf="req.type === 'vacation'">
+              <div class="attrib-row">
+                <span class="attrib-label">Вид отпуска:</span>
+                <span class="attrib-val">
+                  {{ req.is_paid ? 'Ежегодный оплачиваемый трудовой отпуск' : 'Без сохранения заработной платы' }}
+                </span>
+              </div>
+              <div class="attrib-row">
+                <span class="attrib-label">Период:</span>
+                <span class="attrib-val font-semibold">
+                  с {{ formatDate(req.date_from) }} по {{ formatDate(req.date_to) }}
+                </span>
+              </div>
+              <div class="attrib-row">
+                <span class="attrib-label">Продолжительность:</span>
+                <span class="attrib-val">{{ req.days_count }} календарных дней</span>
+              </div>
+            </ng-container>
+
+            <ng-container *ngIf="req.type === 'advance'">
+              <div class="attrib-row">
+                <span class="attrib-label">Сумма аванса:</span>
+                <span class="attrib-val font-semibold text-green">{{ formatCurrency(req.amount) }}</span>
+              </div>
+              <div class="attrib-row">
+                <span class="attrib-label">Желаемая дата:</span>
+                <span class="attrib-val">{{ formatDate(req.desired_date) }}</span>
+              </div>
+            </ng-container>
+
+            <div class="attrib-row" *ngIf="req.comment">
+              <span class="attrib-label">Обоснование:</span>
+              <span class="attrib-val italic-val">«{{ req.comment }}»</span>
+            </div>
+
+            <div class="attrib-row" *ngIf="req.manager_comment">
+              <span class="attrib-label">Комментарий руководителя:</span>
+              <span class="attrib-val text-amber font-semibold">«{{ req.manager_comment }}»</span>
+            </div>
+          </div>
+
+          <!-- Attachment Preview Block -->
+          <div class="attached-doc-viewer" *ngIf="req.document_url">
+            <div class="viewer-header">
+              <app-icon name="paperclip" [size]="16"></app-icon>
+              <span>Прикрепленный скан заявления:</span>
+              <a [href]="req.document_url" target="_blank" class="open-link">
+                <app-icon name="eye" [size]="13"></app-icon>
+                <span>Открыть оригинал</span>
+              </a>
+            </div>
+            <div class="viewer-body">
+              <img
+                *ngIf="!req.document_url.endsWith('.pdf')"
+                [src]="req.document_url"
+                alt="Скан заявления"
+                class="scan-preview-img"
+              />
+              <div *ngIf="req.document_url.endsWith('.pdf')" class="pdf-placeholder">
+                <app-icon name="file-text" [size]="36"></app-icon>
+                <span>Электронный документ в формате PDF</span>
+                <a [href]="req.document_url" target="_blank" class="btn-pdf-view">
+                  Открыть PDF в новой вкладке
+                </a>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <!-- History / Timeline Audit Trail -->
+        <div class="timeline-section">
+          <div class="timeline-title">
+            <app-icon name="clock" [size]="16"></app-icon>
+            <span>История движения документа</span>
+          </div>
+
+          <div class="timeline-list" *ngIf="selectedHistory().length > 0">
+            <div class="timeline-item" *ngFor="let h of selectedHistory()">
+              <div class="timeline-point"></div>
+              <div class="timeline-content">
+                <div class="timeline-header">
+                  <span class="actor-name">{{ h.actor_name || 'Система' }}</span>
+                  <span class="timeline-time">{{ formatDate(h.created_at) }}</span>
+                </div>
+                <div class="timeline-text">{{ h.comment }}</div>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <!-- Decision Box for Manager / HR -->
+        <div class="decision-panel" *ngIf="canApproveRequest(req)">
+          <div class="decision-panel-title">
+            <app-icon name="shield" [size]="18"></app-icon>
+            <span>Решение руководителя подразделения / HR</span>
+          </div>
+
+          <div class="form-row">
+            <label class="field-label">
+              Комментарий / Замечания к согласованию:
+              <span class="required" *ngIf="decisionType() === 'revision_needed' || decisionType() === 'rejected'">*</span>
+            </label>
+            <textarea
+              class="form-control"
+              rows="2"
+              placeholder="При согласовании укажите примечание; при отправке на доработку обязательно укажите, что именно исправить сотруднику..."
+              [ngModel]="managerDecisionComment()"
+              (ngModelChange)="managerDecisionComment.set($event)"
+            ></textarea>
+          </div>
+
+          <div class="alert alert-danger" *ngIf="actionError()">
+            <app-icon name="alert-triangle" [size]="16"></app-icon>
+            <span>{{ actionError() }}</span>
+          </div>
+
+          <div class="decision-buttons">
+            <button
+              type="button"
+              class="btn-approve"
+              [disabled]="isDecisionSubmitting()"
+              (click)="makeDecision('approved')"
+            >
+              <app-icon name="check-circle" [size]="16"></app-icon>
+              <span>Одобрить заявку</span>
+            </button>
+
+            <button
+              type="button"
+              class="btn-revision"
+              [disabled]="isDecisionSubmitting()"
+              (click)="makeDecision('revision_needed')"
+            >
+              <app-icon name="rotate-ccw" [size]="16"></app-icon>
+              <span>На доработку</span>
+            </button>
+
+            <button
+              type="button"
+              class="btn-reject"
+              [disabled]="isDecisionSubmitting()"
+              (click)="makeDecision('rejected')"
+            >
+              <app-icon name="x-circle" [size]="16"></app-icon>
+              <span>Отклонить</span>
+            </button>
+          </div>
+        </div>
+      </div>
+
+      <div class="modal-footer">
+        <button type="button" class="btn-cancel" (click)="closeDetailModal()">
+          Закрыть
+        </button>
+      </div>
+    </div>
+  </div>
+</div>

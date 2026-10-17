@@ -53,6 +53,13 @@ import { CommonModule } from '@angular/common';
         <path d="M22 3h-6a4 4 0 0 0-4 4v14a3 3 0 0 1 3-3h7z"/>
       </g>
 
+      <!-- GraduationCap / Academy -->
+      <g *ngSwitchCase="'graduation-cap'">
+        <path d="M21.42 10.922a1 1 0 0 0-.019-1.838L12.83 5.18a2 2 0 0 0-1.66 0L2.6 9.08a1 1 0 0 0 0 1.832l8.57 3.908a2 2 0 0 0 1.66 0z"/>
+        <path d="M22 10v6"/>
+        <path d="M6 12.5V16a6 3 0 0 0 12 0v-3.5"/>
+      </g>
+
       <!-- Bot / AI Jana -->
       <g *ngSwitchCase="'bot'">
         <path d="M12 8V4H8"/>
@@ -222,6 +229,44 @@ import { CommonModule } from '@angular/common';
       </g>
       <g *ngSwitchCase="'chevron-right'">
         <polyline points="9 18 15 12 9 6"/>
+      </g>
+
+      <!-- Paperclip / Attachment -->
+      <g *ngSwitchCase="'paperclip'">
+        <path d="m21.44 11.05-9.19 9.19a6 6 0 0 1-8.49-8.49l8.57-8.57A4 4 0 1 1 18 8.84l-8.59 8.57a2 2 0 0 1-2.83-2.83l8.49-8.48"/>
+      </g>
+
+      <!-- Upload -->
+      <g *ngSwitchCase="'upload'">
+        <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/>
+        <polyline points="17 8 12 3 7 8"/>
+        <line x1="12" y1="3" x2="12" y2="15"/>
+      </g>
+
+      <!-- Download -->
+      <g *ngSwitchCase="'download'">
+        <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/>
+        <polyline points="7 10 12 15 17 10"/>
+        <line x1="12" y1="15" x2="12" y2="3"/>
+      </g>
+
+      <!-- RotateCcw / Resubmit -->
+      <g *ngSwitchCase="'rotate-ccw'">
+        <path d="M3 12a9 9 0 1 0 9-9 9.75 9.75 0 0 0-6.74 2.74L3 8"/>
+        <path d="M3 3v5h5"/>
+      </g>
+
+      <!-- Wallet / Advance -->
+      <g *ngSwitchCase="'wallet'">
+        <path d="M19 7V4a1 1 0 0 0-1-1H5a2 2 0 0 0 0 4h15a1 1 0 0 1 1 1v4h-3a2 2 0 0 0 0 4h3a1 1 0 0 0 1-1v-2a1 1 0 0 0-1-1"/>
+        <path d="M3 5v14a2 2 0 0 0 2 2h15a1 1 0 0 0 1-1v-4"/>
+      </g>
+
+      <!-- Printer -->
+      <g *ngSwitchCase="'printer'">
+        <polyline points="6 9 6 2 18 2 18 9"/>
+        <path d="M6 18H4a2 2 0 0 1-2-2v-5a2 2 0 0 1 2-2h16a2 2 0 0 1 2 2v5a2 2 0 0 1-2 2h-2"/>
+        <rect width="12" height="8" x="6" y="14"/>
       </g>
 
       <!-- Default circle -->

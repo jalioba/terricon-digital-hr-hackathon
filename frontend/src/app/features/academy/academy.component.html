@@ -1,0 +1,594 @@
+<div class="academy-page">
+  <!-- Top Navigation & Summary Toolbar -->
+  <div class="academy-top-bar">
+    <div class="bar-left">
+      <div class="page-title-group">
+        <div class="academy-badge">
+          <app-icon name="graduation-cap" [size]="16"></app-icon>
+          <span>Jana Academy</span>
+        </div>
+        <h1 class="page-title">Корпоративный университет</h1>
+      </div>
+      <p class="page-subtitle">
+        Две независимые программы обучения: <strong>1. Функционал платформы</strong> (по ролям) и <strong>2. Задачи работы</strong> (по отделу и должности).
+      </p>
+    </div>
+
+    <!-- User Meta Pill -->
+    <div class="bar-right">
+      <div class="user-role-pill">
+        <app-icon name="user" [size]="14"></app-icon>
+        <span>
+          {{ currentUser()?.full_name }} •
+          <strong *ngIf="isEmployee()">Работник ({{ currentUser()?.dept_ru }})</strong>
+          <strong *ngIf="isManager()">Руководитель ({{ currentUser()?.dept_ru }})</strong>
+          <strong *ngIf="isHr()">HR-директор</strong>
+        </span>
+      </div>
+    </div>
+  </div>
+
+  <!-- Success Notification -->
+  <div class="alert alert-success" *ngIf="actionSuccess()">
+    <app-icon name="check-circle" [size]="18"></app-icon>
+    <span>{{ actionSuccess() }}</span>
+  </div>
+
+  <!-- Independent Track Navigation Tabs -->
+  <div class="track-navigation-tabs">
+    <button
+      type="button"
+      class="track-tab-btn"
+      [class.active]="activeTrack() === 'platform'"
+      (click)="switchTrack('platform')"
+    >
+      <div class="track-tab-icon icon-platform">
+        <app-icon name="bot" [size]="20"></app-icon>
+      </div>
+      <div class="track-tab-text">
+        <div class="track-tab-number">Часть 1</div>
+        <div class="track-tab-title">Обучение по функционалу платформы</div>
+        <div class="track-tab-desc">
+          {{ isHr() ? 'Мониторинг онбординга сотрудников и руководителей' : 'Инструкции по вашим вкладкам и разделам системы' }}
+        </div>
+      </div>
+    </button>
+
+    <button
+      type="button"
+      class="track-tab-btn"
+      [class.active]="activeTrack() === 'job'"
+      (click)="switchTrack('job')"
+    >
+      <div class="track-tab-icon icon-job">
+        <app-icon name="book-open" [size]="20"></app-icon>
+      </div>
+      <div class="track-tab-text">
+        <div class="track-tab-number">Часть 2</div>
+        <div class="track-tab-title">Обучение по задачам работы</div>
+        <div class="track-tab-desc">
+          Профессиональные регламенты в зависимости от отдела и должности
+        </div>
+      </div>
+    </button>
+  </div>
+
+  <!-- Loading State -->
+  <div class="loading-state" *ngIf="isLoading()">
+    <app-loading text="Загрузка курсов Jana Academy..."></app-loading>
+  </div>
+
+  <!-- ========================================================
+       TRACK 1: ПЛАТФОРМА (Platform Onboarding)
+       ======================================================== -->
+  <div class="track-content" *ngIf="!isLoading() && activeTrack() === 'platform'">
+    <!-- EMPLOYEE & MANAGER VIEW -->
+    <ng-container *ngIf="!isHr()">
+      <div class="platform-hero-card" *ngIf="platformCourse() as course">
+        <div class="hero-left">
+          <div class="hero-tag">
+            <app-icon name="sparkles" [size]="14"></app-icon>
+            <span>Обязательный онбординг для {{ isManager() ? 'руководителя' : 'сотрудника' }}</span>
+          </div>
+
+          <h2 class="hero-title">{{ course.title_ru }}</h2>
+          <p class="hero-desc">{{ course.description_ru }}</p>
+
+          <div class="hero-lessons-list">
+            <div class="lesson-item-preview" *ngFor="let l of course.lessons; let i = index">
+              <span class="lesson-num">{{ i + 1 }}</span>
+              <span class="lesson-name">{{ l.title }}</span>
+            </div>
+          </div>
+
+          <div class="hero-actions">
+            <button
+              type="button"
+              class="btn-start-course"
+              (click)="startCourse(course)"
+            >
+              <app-icon [name]="course.status === 'completed' ? 'rotate-ccw' : 'book-open'" [size]="16"></app-icon>
+              <span>{{ course.status === 'completed' ? 'Пройти повторно' : (course.progress > 0 ? 'Продолжить обучение' : 'Начать обучение') }}</span>
+            </button>
+          </div>
+        </div>
+
+        <div class="hero-right">
+          <div class="status-card-box" [class.box-completed]="course.status === 'completed'">
+            <div class="status-header">Статус прохождения</div>
+            <div class="status-val-row">
+              <span class="status-title">
+                {{ course.status === 'completed' ? 'Курс завершен ✅' : (course.progress > 0 ? 'В процессе ⏳' : 'Не начато ⭕') }}
+              </span>
+              <span class="status-percent">{{ course.progress }}%</span>
+            </div>
+
+            <div class="progress-bar-wrap">
+              <div class="progress-fill" [style.width.%]="course.progress"></div>
+            </div>
+
+            <div class="score-badge" *ngIf="course.score !== null && course.score !== undefined">
+              <app-icon name="award" [size]="16"></app-icon>
+              <span>Результат итогового теста: <strong>{{ course.score }}%</strong></span>
+            </div>
+
+            <div class="role-specific-note">
+              <app-icon name="shield" [size]="15"></app-icon>
+              <span *ngIf="isEmployee()">
+                Программа охватывает ваши вкладки: «Задачи», «Заявки», «Jana AI».
+              </span>
+              <span *ngIf="isManager()">
+                Программа охватывает вкладки руководителя: «Сотрудники», «Задачи», «Заявки отдела».
+              </span>
+            </div>
+          </div>
+        </div>
+      </div>
+    </ng-container>
+
+    <!-- HR DIRECTOR VIEW: ONBOARDING OVERSIGHT -->
+    <ng-container *ngIf="isHr()">
+      <!-- HR Info Banner -->
+      <div class="hr-onboarding-banner">
+        <div class="banner-icon">
+          <app-icon name="shield" [size]="24"></app-icon>
+        </div>
+        <div class="banner-text">
+          <h3>Панель контроля онбординга платформы (HR-директор)</h3>
+          <p>
+            HR-службе не требуется проходить базовое обучение. Ниже представлена сквозная аналитика: кто из сотрудников и руководителей подразделений успешно освоил функционал платформы, а кому требуется напомнить.
+          </p>
+        </div>
+      </div>
+
+      <!-- KPI Metrics Grid -->
+      <div class="hr-metrics-grid" *ngIf="hrStats() as stats">
+        <div class="hr-metric-card">
+          <span class="m-label">Всего сотрудников</span>
+          <div class="m-val">{{ stats.total }}</div>
+          <span class="m-sub">в реестре штата</span>
+        </div>
+
+        <div class="hr-metric-card border-green">
+          <span class="m-label">Завершили онбординг</span>
+          <div class="m-val text-green">{{ stats.completed }} <small>({{ stats.percent }}%)</small></div>
+          <span class="m-sub">сдали итоговый тест</span>
+        </div>
+
+        <div class="hr-metric-card border-amber">
+          <span class="m-label">В процессе / Не начато</span>
+          <div class="m-val text-amber">{{ stats.notStarted + stats.inProgress }}</div>
+          <span class="m-sub">требуют контроля</span>
+        </div>
+      </div>
+
+      <!-- Filters & Search Toolbar -->
+      <div class="oversight-toolbar">
+        <div class="search-box">
+          <app-icon name="search" [size]="16" extraClass="search-icon"></app-icon>
+          <input
+            type="text"
+            placeholder="Поиск по ФИО, должности, отделу..."
+            [ngModel]="hrSearch()"
+            (ngModelChange)="hrSearch.set($event)"
+          />
+        </div>
+
+        <div class="filter-group">
+          <select [ngModel]="hrFilterDept()" (ngModelChange)="hrFilterDept.set($event)" class="filter-select">
+            <option value="all">Все отделы</option>
+            <option value="1">Отдел поставок заказов</option>
+            <option value="2">Отдел логистики и склада</option>
+            <option value="3">Отдел IT и поддержки</option>
+          </select>
+        </div>
+
+        <div class="filter-group">
+          <select [ngModel]="hrFilterRole()" (ngModelChange)="hrFilterRole.set($event)" class="filter-select">
+            <option value="all">Все роли</option>
+            <option value="employee">Работники</option>
+            <option value="manager">Руководители</option>
+          </select>
+        </div>
+      </div>
+
+      <!-- Oversight Table -->
+      <div class="oversight-table-wrap">
+        <table class="oversight-table">
+          <thead>
+            <tr>
+              <th>Сотрудник</th>
+              <th>Подразделение</th>
+              <th>Роль</th>
+              <th>Статус онбординга</th>
+              <th>Балл теста</th>
+              <th style="text-align: right;">Действие</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr *ngFor="let u of filteredHrUsers()">
+              <td>
+                <div class="user-meta-cell">
+                  <span class="user-name">{{ u.full_name }}</span>
+                  <span class="user-pos">{{ u.position }}</span>
+                </div>
+              </td>
+              <td>{{ u.dept_ru }}</td>
+              <td>
+                <span class="role-badge" [class.role-mgr]="u.role === 'manager'">
+                  {{ u.role === 'manager' ? 'Руководитель' : 'Работник' }}
+                </span>
+              </td>
+              <td>
+                <span class="onboarding-status-pill" [class.status-done]="u.platform_completed === 1">
+                  <app-icon [name]="u.platform_completed === 1 ? 'check-circle' : 'clock'" [size]="13"></app-icon>
+                  <span>{{ u.platform_completed === 1 ? 'Онбординг пройден' : 'Не завершен' }}</span>
+                </span>
+              </td>
+              <td>
+                <span *ngIf="u.platform_completed === 1" class="score-pill">
+                  {{ u.platform_score }}%
+                </span>
+                <span *ngIf="u.platform_completed !== 1" class="text-muted">—</span>
+              </td>
+              <td style="text-align: right;">
+                <button
+                  type="button"
+                  class="btn-remind"
+                  *ngIf="u.platform_completed !== 1"
+                  (click)="sendReminder(u)"
+                  title="Отправить напоминание о необходимости прохождения"
+                >
+                  <app-icon name="send" [size]="13"></app-icon>
+                  <span>Напомнить</span>
+                </button>
+                <span *ngIf="u.platform_completed === 1" class="done-check">
+                  <app-icon name="check" [size]="14"></app-icon>
+                </span>
+              </td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+    </ng-container>
+  </div>
+
+  <!-- ========================================================
+       TRACK 2: ЗАДАЧИ РАБОТЫ (Job & Department Training)
+       ======================================================== -->
+  <div class="track-content" *ngIf="!isLoading() && activeTrack() === 'job'">
+    <!-- EMPLOYEE & MANAGER VIEW -->
+    <ng-container *ngIf="!isHr()">
+      <div class="job-track-header">
+        <div class="dept-specialization-pill">
+          <app-icon name="book-open" [size]="15"></app-icon>
+          <span>
+            Профессиональные регламенты: <strong>{{ currentUser()?.dept_ru }}</strong> • Должность: <strong>{{ currentUser()?.position }}</strong>
+          </span>
+        </div>
+      </div>
+
+      <div class="courses-grid">
+        <div class="course-card" *ngFor="let c of jobCourses()">
+          <div class="course-card-top">
+            <div class="course-tag-row">
+              <span class="track-badge">Профессиональное обучение</span>
+              <span class="course-lessons-badge">{{ c.lessons.length }} уроков</span>
+            </div>
+            <h3 class="course-title">{{ c.title_ru }}</h3>
+            <p class="course-desc">{{ c.description_ru }}</p>
+          </div>
+
+          <div class="course-card-bottom">
+            <div class="course-progress-row">
+              <div class="progress-bar-wrap">
+                <div class="progress-fill" [style.width.%]="c.progress"></div>
+              </div>
+              <span class="progress-text">{{ c.progress }}%</span>
+            </div>
+
+            <div class="card-footer-action">
+              <div class="score-indicator" *ngIf="c.score !== null && c.score !== undefined">
+                <app-icon name="award" [size]="14"></app-icon>
+                <span>Балл: {{ c.score }}%</span>
+              </div>
+
+              <button
+                type="button"
+                class="btn-course-action"
+                (click)="startCourse(c)"
+              >
+                <app-icon [name]="c.status === 'completed' ? 'rotate-ccw' : 'book-open'" [size]="14"></app-icon>
+                <span>{{ c.status === 'completed' ? 'Повторить' : (c.progress > 0 ? 'Продолжить' : 'Изучить') }}</span>
+              </button>
+            </div>
+          </div>
+        </div>
+      </div>
+    </ng-container>
+
+    <!-- HR VIEW: CATALOG EXPLORER BY DEPARTMENT AND ROLE -->
+    <ng-container *ngIf="isHr()">
+      <div class="hr-catalog-controls">
+        <div class="catalog-filters">
+          <div class="catalog-filter-item">
+            <label class="filter-label">Выберите подразделение:</label>
+            <div class="dept-selector-buttons">
+              <button
+                type="button"
+                class="dept-btn"
+                [class.active]="hrSelectedJobDept() === 1"
+                (click)="hrSelectedJobDept.set(1)"
+              >
+                Отдел поставок заказов
+              </button>
+              <button
+                type="button"
+                class="dept-btn"
+                [class.active]="hrSelectedJobDept() === 2"
+                (click)="hrSelectedJobDept.set(2)"
+              >
+                Отдел логистики и склада
+              </button>
+              <button
+                type="button"
+                class="dept-btn"
+                [class.active]="hrSelectedJobDept() === 3"
+                (click)="hrSelectedJobDept.set(3)"
+              >
+                Отдел IT и поддержки
+              </button>
+            </div>
+          </div>
+
+          <div class="catalog-filter-item">
+            <label class="filter-label">Должностная категория:</label>
+            <div class="role-selector-buttons">
+              <button
+                type="button"
+                class="role-btn"
+                [class.active]="hrSelectedJobRole() === 'employee'"
+                (click)="hrSelectedJobRole.set('employee')"
+              >
+                Работники отдела
+              </button>
+              <button
+                type="button"
+                class="role-btn"
+                [class.active]="hrSelectedJobRole() === 'manager'"
+                (click)="hrSelectedJobRole.set('manager')"
+              >
+                Руководители отдела
+              </button>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <div class="courses-grid">
+        <div class="course-card" *ngFor="let c of hrJobCourses()">
+          <div class="course-card-top">
+            <div class="course-tag-row">
+              <span class="track-badge">
+                {{ hrSelectedJobRole() === 'manager' ? 'Руководящий состав' : 'Линейный персонал' }}
+              </span>
+              <span class="course-lessons-badge">{{ c.lessons.length }} уроков</span>
+            </div>
+            <h3 class="course-title">{{ c.title_ru }}</h3>
+            <p class="course-desc">{{ c.description_ru }}</p>
+          </div>
+
+          <div class="course-card-bottom">
+            <div class="card-footer-action">
+              <button
+                type="button"
+                class="btn-course-action"
+                (click)="startCourse(c)"
+              >
+                <app-icon name="eye" [size]="14"></app-icon>
+                <span>Просмотреть материалы</span>
+              </button>
+            </div>
+          </div>
+        </div>
+      </div>
+    </ng-container>
+  </div>
+
+  <!-- ========================================================
+       INTERACTIVE LEARNING & QUIZ MODAL
+       ======================================================== -->
+  <div class="modal-overlay" *ngIf="isLearnModalOpen()" (click)="closeLearnModal()">
+    <div class="modal-content learn-modal" (click)="$event.stopPropagation()">
+      <!-- Modal Header -->
+      <div class="modal-header">
+        <div class="modal-header-info">
+          <div class="modal-pre-title">
+            Jana Academy • {{ activeCourse()?.track === 'platform' ? 'Функционал платформы' : 'Задачи работы' }}
+          </div>
+          <h2 class="modal-title">{{ activeCourse()?.title_ru }}</h2>
+        </div>
+        <button type="button" class="modal-close-btn" (click)="closeLearnModal()">
+          <app-icon name="x" [size]="20"></app-icon>
+        </button>
+      </div>
+
+      <div class="modal-body-learning" *ngIf="activeCourse() as course">
+        <!-- Sidebar Navigation of Lessons -->
+        <div class="learning-sidebar">
+          <div class="sidebar-title">Содержание курса:</div>
+          <div class="lessons-nav">
+            <button
+              type="button"
+              class="nav-lesson-btn"
+              *ngFor="let l of course.lessons; let idx = index"
+              [class.active]="!isQuizActive() && currentLessonIndex() === idx"
+              (click)="goToLesson(idx)"
+            >
+              <span class="nav-idx">{{ idx + 1 }}</span>
+              <span class="nav-title">{{ l.title }}</span>
+            </button>
+
+            <!-- Quiz Nav Item -->
+            <button
+              type="button"
+              class="nav-lesson-btn nav-quiz-btn"
+              [class.active]="isQuizActive()"
+              (click)="startQuiz()"
+            >
+              <app-icon name="award" [size]="15"></app-icon>
+              <span>Итоговое тестирование</span>
+            </button>
+          </div>
+        </div>
+
+        <!-- Main Learning Content Pane -->
+        <div class="learning-main">
+          <!-- 1. LESSON VIEW -->
+          <div class="lesson-content-pane" *ngIf="!isQuizActive() && course.lessons[currentLessonIndex()] as lesson">
+            <div class="lesson-meta-bar">
+              <span class="lesson-step">Урок {{ currentLessonIndex() + 1 }} из {{ course.lessons.length }}</span>
+            </div>
+
+            <h3 class="lesson-view-title">{{ lesson.title }}</h3>
+
+            <div class="lesson-view-body">
+              <p>{{ lesson.content }}</p>
+            </div>
+
+            <div class="lesson-footer-nav">
+              <button
+                type="button"
+                class="btn-nav-prev"
+                [disabled]="currentLessonIndex() === 0"
+                (click)="prevLesson()"
+              >
+                <app-icon name="chevron-left" [size]="16"></app-icon>
+                <span>Назад</span>
+              </button>
+
+              <button
+                type="button"
+                class="btn-nav-next"
+                (click)="nextLesson()"
+              >
+                <span>{{ currentLessonIndex() < course.lessons.length - 1 ? 'Следующий урок' : 'Перейти к тесту' }}</span>
+                <app-icon name="arrow-right" [size]="16"></app-icon>
+              </button>
+            </div>
+          </div>
+
+          <!-- 2. QUIZ VIEW -->
+          <div class="quiz-content-pane" *ngIf="isQuizActive()">
+            <!-- If quiz not yet submitted or retaking -->
+            <div class="quiz-form" *ngIf="!quizResult()">
+              <div class="quiz-header">
+                <h3>Итоговое проверочное тестирование</h3>
+                <p>Ответьте на все вопросы. Для успешного зачета необходимо набрать не менее 60% правильных ответов.</p>
+              </div>
+
+              <div class="questions-list">
+                <div class="question-card" *ngFor="let q of quizQuestions(); let qIdx = index">
+                  <div class="question-title">
+                    <span class="q-num">{{ qIdx + 1 }}.</span>
+                    <span>{{ q.question_ru }}</span>
+                  </div>
+
+                  <div class="options-group">
+                    <label
+                      class="option-pill"
+                      *ngFor="let opt of q.options_ru; let optIdx = index"
+                      [class.selected]="userAnswers()[q.id] === optIdx"
+                    >
+                      <input
+                        type="radio"
+                        [name]="'q_' + q.id"
+                        [value]="optIdx"
+                        [checked]="userAnswers()[q.id] === optIdx"
+                        (change)="selectAnswer(q.id, optIdx)"
+                      />
+                      <span>{{ opt }}</span>
+                    </label>
+                  </div>
+                </div>
+              </div>
+
+              <!-- Error Alert -->
+              <div class="alert alert-danger" *ngIf="actionError()">
+                <app-icon name="alert-triangle" [size]="16"></app-icon>
+                <span>{{ actionError() }}</span>
+              </div>
+
+              <div class="quiz-footer">
+                <button
+                  type="button"
+                  class="btn-submit-quiz"
+                  [disabled]="isSubmittingQuiz()"
+                  (click)="submitQuiz()"
+                >
+                  <span class="spinner-white spinner-sm" *ngIf="isSubmittingQuiz()"></span>
+                  <span>{{ isSubmittingQuiz() ? 'Проверка...' : 'Завершить тест и узнать результат' }}</span>
+                </button>
+              </div>
+            </div>
+
+            <!-- Quiz Result Screen -->
+            <div class="quiz-result-card" *ngIf="quizResult() as res">
+              <div class="result-icon-circle" [class.circle-passed]="res.passed" [class.circle-failed]="!res.passed">
+                <app-icon [name]="res.passed ? 'award' : 'alert-triangle'" [size]="40"></app-icon>
+              </div>
+
+              <h3 class="result-title">{{ res.passed ? 'Тестирование успешно пройдено! 🎉' : 'Тест не пройден' }}</h3>
+              <p class="result-msg">{{ res.message }}</p>
+
+              <div class="score-result-box">
+                <div class="score-big">{{ res.score }}%</div>
+                <div class="score-sub">Правильных ответов: {{ res.correct }} из {{ res.total }}</div>
+              </div>
+
+              <div class="result-actions">
+                <button
+                  type="button"
+                  class="btn-retake"
+                  *ngIf="!res.passed"
+                  (click)="retakeQuiz()"
+                >
+                  <app-icon name="rotate-ccw" [size]="16"></app-icon>
+                  <span>Попробовать снова</span>
+                </button>
+
+                <button
+                  type="button"
+                  class="btn-finish"
+                  (click)="closeLearnModal()"
+                >
+                  <span>Вернуться к курсам</span>
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>

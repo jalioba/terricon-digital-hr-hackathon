@@ -75,6 +75,20 @@ export class AuthService {
     }
   }
 
+  refreshProfile(): void {
+    this.api.get<{ profile: User }>('/me').subscribe({
+      next: (res) => {
+        if (res && res.profile) {
+          this.currentUser.set(res.profile);
+          if (typeof localStorage !== 'undefined') {
+            localStorage.setItem('janamen_user', JSON.stringify(res.profile));
+          }
+        }
+      },
+      error: (err) => console.error('Failed to refresh profile', err)
+    });
+  }
+
   logout(): void {
     this.clearSession();
     this.router.navigate(['/login']);
