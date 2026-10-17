@@ -221,12 +221,12 @@ func (h *Handler) Escalate(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// Notify HR Director (user ID 1)
+	// Notify HR Director (find HR user)
 	_ = h.q.CreateNotification(r.Context(), db.CreateNotificationParams{
 		UserID:  1,
 		Kind:    "escalation",
-		TitleRu: fmt.Sprintf("Новое обращение к HR от %s", c.FullName),
-		TitleKz: fmt.Sprintf("%s қызметкерінен HR-ге жаңа сұраныс", c.FullName),
+		Title:   fmt.Sprintf("Новое обращение к HR от %s", c.FullName),
+		Message: req.Question,
 		Link:    "/admin/escalations",
 	})
 
@@ -248,7 +248,7 @@ func (h *Handler) ListKB(w http.ResponseWriter, r *http.Request) {
 
 func (h *Handler) CreateKB(w http.ResponseWriter, r *http.Request) {
 	c := middleware.GetClaims(r.Context())
-	if c == nil || c.Role != "hr_admin" {
+	if c == nil || c.Role != "hr" {
 		httputil.Error(w, http.StatusForbidden, "forbidden: only HR admin can add KB documents")
 		return
 	}
@@ -269,7 +269,7 @@ func (h *Handler) CreateKB(w http.ResponseWriter, r *http.Request) {
 
 func (h *Handler) DeleteKB(w http.ResponseWriter, r *http.Request) {
 	c := middleware.GetClaims(r.Context())
-	if c == nil || c.Role != "hr_admin" {
+	if c == nil || c.Role != "hr" {
 		httputil.Error(w, http.StatusForbidden, "forbidden: only HR admin can delete KB documents")
 		return
 	}
@@ -281,7 +281,7 @@ func (h *Handler) DeleteKB(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	if err := h.q.DeleteKB(r.Context(), int32(id)); err != nil {
+	if err := h.q.DeleteKB(r.Context(), id); err != nil {
 		httputil.Error(w, http.StatusInternalServerError, err.Error())
 		return
 	}
@@ -290,7 +290,7 @@ func (h *Handler) DeleteKB(w http.ResponseWriter, r *http.Request) {
 
 func (h *Handler) ListEscalations(w http.ResponseWriter, r *http.Request) {
 	c := middleware.GetClaims(r.Context())
-	if c == nil || c.Role != "hr_admin" {
+	if c == nil || c.Role != "hr" {
 		httputil.Error(w, http.StatusForbidden, "forbidden: only HR admin can view escalations")
 		return
 	}

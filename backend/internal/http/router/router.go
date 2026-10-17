@@ -15,6 +15,7 @@ import (
 	"github.com/kilcdevs/janamen/internal/modules/ai"
 	"github.com/kilcdevs/janamen/internal/modules/analytics"
 	"github.com/kilcdevs/janamen/internal/modules/auth"
+	"github.com/kilcdevs/janamen/internal/modules/hr"
 	"github.com/kilcdevs/janamen/internal/modules/notifications"
 	"github.com/kilcdevs/janamen/internal/modules/profile"
 	"github.com/kilcdevs/janamen/internal/modules/requests"
@@ -41,8 +42,9 @@ func NewRouter(cfg config.Config, q *db.Queries, zup zup1c.Client, doc documento
 	})
 
 	authH := auth.NewHandler(q, cfg)
+	hrH := hr.NewHandler(q, cfg)
 	profH := profile.NewHandler(q, zup)
-	reqH := requests.NewHandler(q, zup, doc)
+	reqH := requests.NewHandler(q, cfg, zup, doc)
 	teamH := team.NewHandler(q)
 	acadH := academy.NewHandler(q)
 	notifH := notifications.NewHandler(q)
@@ -51,26 +53,30 @@ func NewRouter(cfg config.Config, q *db.Queries, zup zup1c.Client, doc documento
 
 	r.Route("/api", func(api chi.Router) {
 		// Public auth endpoints
-		api.Post("/auth/demo-login", authH.DemoLogin)
-		api.Get("/auth/demo-users", authH.ListDemoUsers)
+		api.Post("/auth/login", authH.Login)
+		api.Get("/departments", authH.ListDepartments)
 
 		// Protected endpoints
 		api.Group(func(p chi.Router) {
 			p.Use(middleware.AuthMiddleware(cfg.JWTSecret))
 
-			// Profile
+			// Current user profile
 			p.Get("/me", profH.GetMe)
-			p.Put("/me/locale", profH.UpdateLocale)
 
-			// Requests
-			p.Get("/requests", reqH.ListRequests)
-			p.Post("/requests", reqH.CreateRequest)
-			p.Get("/requests/{id}", reqH.GetRequest)
-			p.Post("/requests/{id}/approve", reqH.ApproveRequest)
-			p.Post("/requests/{id}/reject", reqH.RejectRequest)
+			// Document upload to Supabase Storage
+			p.Post("/upload", reqH.UploadDocument)
+
+			// Requests (Vacation & Advance)
+			p.Post("/requests", reqH.Create)
+			p.Get("/requests/my", reqH.ListMy)
+			p.Get("/requests/department", reqH.ListDepartment)
+			p.Get("/requests/all", reqH.ListAll)
+			p.Get("/requests/{id}", reqH.Get)
+			p.Post("/requests/{id}/decision", reqH.MakeDecision)
 
 			// Team & Tasks
 			p.Get("/team", teamH.ListTeam)
+			p.Get("/team/academy-progress", teamH.GetAcademyProgress)
 			p.Get("/tasks", teamH.ListTasks)
 			p.Post("/tasks", teamH.CreateTask)
 			p.Put("/tasks/{id}/status", teamH.UpdateTaskStatus)
@@ -94,8 +100,16 @@ func NewRouter(cfg config.Config, q *db.Queries, zup zup1c.Client, doc documento
 			p.Delete("/ai/kb/{id}", aiH.DeleteKB)
 			p.Get("/ai/escalations", aiH.ListEscalations)
 
-			// Analytics (HR Admin)
+			// Analytics
 			p.Get("/analytics", analyH.GetAnalytics)
+
+			// HR Management endpoints (restricted to role 'hr')
+			p.Group(func(hrGroup chi.Router) {
+				hrGroup.Use(middleware.RequireRole("hr"))
+				hrGroup.Post("/hr/employees", hrH.CreateEmployee)
+				hrGroup.Get("/hr/employees", hrH.ListEmployees)
+				hrGroup.Get("/hr/analytics", hrH.GetAnalytics)
+			})
 		})
 	})
 

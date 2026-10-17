@@ -10,58 +10,69 @@ import (
 	"time"
 )
 
-const addHistory = `-- name: AddHistory :exec
-INSERT INTO request_history (request_id, status, actor_id, note) VALUES ($1,$2,$3,$4)
+const addRequestHistory = `-- name: AddRequestHistory :exec
+INSERT INTO request_history (request_id, status, actor_id, comment)
+VALUES ($1, $2, $3, $4)
 `
 
-type AddHistoryParams struct {
+type AddRequestHistoryParams struct {
 	RequestID int    `json:"request_id"`
 	Status    string `json:"status"`
 	ActorID   *int   `json:"actor_id"`
-	Note      string `json:"note"`
+	Comment   string `json:"comment"`
 }
 
-func (q *Queries) AddHistory(ctx context.Context, arg AddHistoryParams) error {
-	_, err := q.db.Exec(ctx, addHistory,
+func (q *Queries) AddRequestHistory(ctx context.Context, arg AddRequestHistoryParams) error {
+	_, err := q.db.Exec(ctx, addRequestHistory,
 		arg.RequestID,
 		arg.Status,
 		arg.ActorID,
-		arg.Note,
+		arg.Comment,
 	)
 	return err
 }
 
-const analyticsDepartments = `-- name: AnalyticsDepartments :many
-SELECT d.name_ru, d.name_kz,
-  (SELECT COUNT(*) FROM users u WHERE u.department_id = d.id)::int AS employees,
-  (SELECT COUNT(*) FROM requests r WHERE r.department_id = d.id)::int AS requests,
-  (SELECT COUNT(*) FROM tasks t WHERE t.department_id = d.id AND t.status <> 'done')::int AS open_tasks
-FROM departments d ORDER BY d.id
+const analyticsApprovalsAudit = `-- name: AnalyticsApprovalsAudit :many
+SELECT r.id, r.type, r.status, r.approved_at,
+       requester.full_name AS requester_name,
+       approver.full_name AS approver_name,
+       d.name_ru AS dept_ru
+FROM requests r
+JOIN users requester ON requester.id = r.user_id
+JOIN departments d ON d.id = r.department_id
+LEFT JOIN users approver ON approver.id = r.approved_by
+WHERE r.approved_by IS NOT NULL
+ORDER BY r.approved_at DESC
+LIMIT 100
 `
 
-type AnalyticsDepartmentsRow struct {
-	NameRu    string `json:"name_ru"`
-	NameKz    string `json:"name_kz"`
-	Employees int    `json:"employees"`
-	Requests  int    `json:"requests"`
-	OpenTasks int    `json:"open_tasks"`
+type AnalyticsApprovalsAuditRow struct {
+	ID            int        `json:"id"`
+	Type          string     `json:"type"`
+	Status        string     `json:"status"`
+	ApprovedAt    *time.Time `json:"approved_at"`
+	RequesterName string     `json:"requester_name"`
+	ApproverName  *string    `json:"approver_name"`
+	DeptRu        string     `json:"dept_ru"`
 }
 
-func (q *Queries) AnalyticsDepartments(ctx context.Context) ([]AnalyticsDepartmentsRow, error) {
-	rows, err := q.db.Query(ctx, analyticsDepartments)
+func (q *Queries) AnalyticsApprovalsAudit(ctx context.Context) ([]AnalyticsApprovalsAuditRow, error) {
+	rows, err := q.db.Query(ctx, analyticsApprovalsAudit)
 	if err != nil {
 		return nil, err
 	}
 	defer rows.Close()
-	var items []AnalyticsDepartmentsRow
+	var items []AnalyticsApprovalsAuditRow
 	for rows.Next() {
-		var i AnalyticsDepartmentsRow
+		var i AnalyticsApprovalsAuditRow
 		if err := rows.Scan(
-			&i.NameRu,
-			&i.NameKz,
-			&i.Employees,
-			&i.Requests,
-			&i.OpenTasks,
+			&i.ID,
+			&i.Type,
+			&i.Status,
+			&i.ApprovedAt,
+			&i.RequesterName,
+			&i.ApproverName,
+			&i.DeptRu,
 		); err != nil {
 			return nil, err
 		}
@@ -73,43 +84,71 @@ func (q *Queries) AnalyticsDepartments(ctx context.Context) ([]AnalyticsDepartme
 	return items, nil
 }
 
-const analyticsLearning = `-- name: AnalyticsLearning :one
-SELECT COUNT(*)::int AS total, COUNT(*) FILTER (WHERE progress = 100)::int AS completed,
-       COALESCE(AVG(progress),0)::float8 AS avg_progress
-FROM course_assignments
+const analyticsDepartmentStats = `-- name: AnalyticsDepartmentStats :many
+SELECT d.id, d.code, d.name_ru, d.name_kz,
+       (SELECT COUNT(*) FROM users u WHERE u.department_id = d.id)::int AS employees_count,
+       (SELECT COUNT(*) FROM requests r WHERE r.department_id = d.id)::int AS requests_count,
+       (SELECT COUNT(*) FROM tasks t WHERE t.department_id = d.id AND t.status <> 'done')::int AS open_tasks_count
+FROM departments d
+ORDER BY d.id
 `
 
-type AnalyticsLearningRow struct {
-	Total       int     `json:"total"`
-	Completed   int     `json:"completed"`
-	AvgProgress float64 `json:"avg_progress"`
+type AnalyticsDepartmentStatsRow struct {
+	ID             int    `json:"id"`
+	Code           string `json:"code"`
+	NameRu         string `json:"name_ru"`
+	NameKz         string `json:"name_kz"`
+	EmployeesCount int    `json:"employees_count"`
+	RequestsCount  int    `json:"requests_count"`
+	OpenTasksCount int    `json:"open_tasks_count"`
 }
 
-func (q *Queries) AnalyticsLearning(ctx context.Context) (AnalyticsLearningRow, error) {
-	row := q.db.QueryRow(ctx, analyticsLearning)
-	var i AnalyticsLearningRow
-	err := row.Scan(&i.Total, &i.Completed, &i.AvgProgress)
-	return i, err
-}
-
-const analyticsRequests = `-- name: AnalyticsRequests :many
-SELECT status, COUNT(*)::int AS cnt FROM requests GROUP BY status
-`
-
-type AnalyticsRequestsRow struct {
-	Status string `json:"status"`
-	Cnt    int    `json:"cnt"`
-}
-
-func (q *Queries) AnalyticsRequests(ctx context.Context) ([]AnalyticsRequestsRow, error) {
-	rows, err := q.db.Query(ctx, analyticsRequests)
+func (q *Queries) AnalyticsDepartmentStats(ctx context.Context) ([]AnalyticsDepartmentStatsRow, error) {
+	rows, err := q.db.Query(ctx, analyticsDepartmentStats)
 	if err != nil {
 		return nil, err
 	}
 	defer rows.Close()
-	var items []AnalyticsRequestsRow
+	var items []AnalyticsDepartmentStatsRow
 	for rows.Next() {
-		var i AnalyticsRequestsRow
+		var i AnalyticsDepartmentStatsRow
+		if err := rows.Scan(
+			&i.ID,
+			&i.Code,
+			&i.NameRu,
+			&i.NameKz,
+			&i.EmployeesCount,
+			&i.RequestsCount,
+			&i.OpenTasksCount,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
+const analyticsRequestsByStatus = `-- name: AnalyticsRequestsByStatus :many
+SELECT status, COUNT(*)::int AS cnt FROM requests GROUP BY status
+`
+
+type AnalyticsRequestsByStatusRow struct {
+	Status string `json:"status"`
+	Cnt    int    `json:"cnt"`
+}
+
+func (q *Queries) AnalyticsRequestsByStatus(ctx context.Context) ([]AnalyticsRequestsByStatusRow, error) {
+	rows, err := q.db.Query(ctx, analyticsRequestsByStatus)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []AnalyticsRequestsByStatusRow
+	for rows.Next() {
+		var i AnalyticsRequestsByStatusRow
 		if err := rows.Scan(&i.Status, &i.Cnt); err != nil {
 			return nil, err
 		}
@@ -122,23 +161,24 @@ func (q *Queries) AnalyticsRequests(ctx context.Context) ([]AnalyticsRequestsRow
 }
 
 const assignCourse = `-- name: AssignCourse :exec
-INSERT INTO course_assignments (course_id, user_id, assigned_by) VALUES ($1,$2,$3)
+INSERT INTO course_assignments (course_id, user_id, status, progress)
+VALUES ($1, $2, 'not_started', 0)
 ON CONFLICT (course_id, user_id) DO NOTHING
 `
 
 type AssignCourseParams struct {
-	CourseID   int  `json:"course_id"`
-	UserID     int  `json:"user_id"`
-	AssignedBy *int `json:"assigned_by"`
+	CourseID int `json:"course_id"`
+	UserID   int `json:"user_id"`
 }
 
 func (q *Queries) AssignCourse(ctx context.Context, arg AssignCourseParams) error {
-	_, err := q.db.Exec(ctx, assignCourse, arg.CourseID, arg.UserID, arg.AssignedBy)
+	_, err := q.db.Exec(ctx, assignCourse, arg.CourseID, arg.UserID)
 	return err
 }
 
 const completeCourse = `-- name: CompleteCourse :exec
-UPDATE course_assignments SET progress = 100, score = $3, completed_at = now()
+UPDATE course_assignments
+SET status = 'completed', progress = 100, score = $3, completed_at = now()
 WHERE course_id = $1 AND user_id = $2
 `
 
@@ -154,7 +194,7 @@ func (q *Queries) CompleteCourse(ctx context.Context, arg CompleteCourseParams) 
 }
 
 const createEscalation = `-- name: CreateEscalation :one
-INSERT INTO ai_escalations (user_id, question) VALUES ($1,$2) RETURNING id, user_id, question, created_at
+INSERT INTO ai_escalations (user_id, question) VALUES ($1, $2) RETURNING id, user_id, question, status, created_at
 `
 
 type CreateEscalationParams struct {
@@ -169,6 +209,7 @@ func (q *Queries) CreateEscalation(ctx context.Context, arg CreateEscalationPara
 		&i.ID,
 		&i.UserID,
 		&i.Question,
+		&i.Status,
 		&i.CreatedAt,
 	)
 	return i, err
@@ -176,7 +217,7 @@ func (q *Queries) CreateEscalation(ctx context.Context, arg CreateEscalationPara
 
 const createKB = `-- name: CreateKB :one
 INSERT INTO kb_documents (title, section, url, content, keywords, lang)
-VALUES ($1,$2,$3,$4,$5,$6) RETURNING id, title, section, url, content, keywords, lang
+VALUES ($1, $2, $3, $4, $5, $6) RETURNING id, title, section, url, content, keywords, lang
 `
 
 type CreateKBParams struct {
@@ -211,14 +252,15 @@ func (q *Queries) CreateKB(ctx context.Context, arg CreateKBParams) (KbDocument,
 }
 
 const createNotification = `-- name: CreateNotification :exec
-INSERT INTO notifications (user_id, kind, title_ru, title_kz, link) VALUES ($1,$2,$3,$4,$5)
+INSERT INTO notifications (user_id, kind, title, message, link)
+VALUES ($1, $2, $3, $4, $5)
 `
 
 type CreateNotificationParams struct {
 	UserID  int    `json:"user_id"`
 	Kind    string `json:"kind"`
-	TitleRu string `json:"title_ru"`
-	TitleKz string `json:"title_kz"`
+	Title   string `json:"title"`
+	Message string `json:"message"`
 	Link    string `json:"link"`
 }
 
@@ -226,16 +268,21 @@ func (q *Queries) CreateNotification(ctx context.Context, arg CreateNotification
 	_, err := q.db.Exec(ctx, createNotification,
 		arg.UserID,
 		arg.Kind,
-		arg.TitleRu,
-		arg.TitleKz,
+		arg.Title,
+		arg.Message,
 		arg.Link,
 	)
 	return err
 }
 
 const createRequest = `-- name: CreateRequest :one
-INSERT INTO requests (type, user_id, department_id, date_from, date_to, days, amount, comment, status)
-VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9) RETURNING id, type, user_id, department_id, date_from, date_to, days, amount, comment, status, created_at
+INSERT INTO requests (
+  type, user_id, department_id,
+  date_from, date_to, days_count, is_paid,
+  amount, desired_date, document_url, comment, status
+)
+VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12)
+RETURNING id, type, user_id, department_id, date_from, date_to, days_count, is_paid, amount, desired_date, document_url, comment, manager_comment, status, approved_by, approved_at, created_at, updated_at
 `
 
 type CreateRequestParams struct {
@@ -244,8 +291,11 @@ type CreateRequestParams struct {
 	DepartmentID int        `json:"department_id"`
 	DateFrom     *time.Time `json:"date_from"`
 	DateTo       *time.Time `json:"date_to"`
-	Days         int        `json:"days"`
+	DaysCount    int        `json:"days_count"`
+	IsPaid       bool       `json:"is_paid"`
 	Amount       float64    `json:"amount"`
+	DesiredDate  *time.Time `json:"desired_date"`
+	DocumentUrl  string     `json:"document_url"`
 	Comment      string     `json:"comment"`
 	Status       string     `json:"status"`
 }
@@ -257,8 +307,11 @@ func (q *Queries) CreateRequest(ctx context.Context, arg CreateRequestParams) (R
 		arg.DepartmentID,
 		arg.DateFrom,
 		arg.DateTo,
-		arg.Days,
+		arg.DaysCount,
+		arg.IsPaid,
 		arg.Amount,
+		arg.DesiredDate,
+		arg.DocumentUrl,
 		arg.Comment,
 		arg.Status,
 	)
@@ -270,45 +323,107 @@ func (q *Queries) CreateRequest(ctx context.Context, arg CreateRequestParams) (R
 		&i.DepartmentID,
 		&i.DateFrom,
 		&i.DateTo,
-		&i.Days,
+		&i.DaysCount,
+		&i.IsPaid,
 		&i.Amount,
+		&i.DesiredDate,
+		&i.DocumentUrl,
 		&i.Comment,
+		&i.ManagerComment,
 		&i.Status,
+		&i.ApprovedBy,
+		&i.ApprovedAt,
 		&i.CreatedAt,
+		&i.UpdatedAt,
 	)
 	return i, err
 }
 
 const createTask = `-- name: CreateTask :one
-INSERT INTO tasks (assignee_id, created_by, department_id, title, due_date)
-VALUES ($1,$2,$3,$4,$5) RETURNING id, assignee_id, created_by, department_id, title, due_date, status
+INSERT INTO tasks (title, description, department_id, created_by, assigned_to, due_date, status)
+VALUES ($1, $2, $3, $4, $5, $6, $7)
+RETURNING id, title, description, department_id, created_by, assigned_to, due_date, status, created_at, updated_at
 `
 
 type CreateTaskParams struct {
-	AssigneeID   int        `json:"assignee_id"`
-	CreatedBy    int        `json:"created_by"`
-	DepartmentID int        `json:"department_id"`
 	Title        string     `json:"title"`
+	Description  string     `json:"description"`
+	DepartmentID int        `json:"department_id"`
+	CreatedBy    int        `json:"created_by"`
+	AssignedTo   int        `json:"assigned_to"`
 	DueDate      *time.Time `json:"due_date"`
+	Status       string     `json:"status"`
 }
 
 func (q *Queries) CreateTask(ctx context.Context, arg CreateTaskParams) (Task, error) {
 	row := q.db.QueryRow(ctx, createTask,
-		arg.AssigneeID,
-		arg.CreatedBy,
-		arg.DepartmentID,
 		arg.Title,
+		arg.Description,
+		arg.DepartmentID,
+		arg.CreatedBy,
+		arg.AssignedTo,
 		arg.DueDate,
+		arg.Status,
 	)
 	var i Task
 	err := row.Scan(
 		&i.ID,
-		&i.AssigneeID,
-		&i.CreatedBy,
-		&i.DepartmentID,
 		&i.Title,
+		&i.Description,
+		&i.DepartmentID,
+		&i.CreatedBy,
+		&i.AssignedTo,
 		&i.DueDate,
 		&i.Status,
+		&i.CreatedAt,
+		&i.UpdatedAt,
+	)
+	return i, err
+}
+
+const createUser = `-- name: CreateUser :one
+INSERT INTO users (iin, password_hash, full_name, role, department_id, company, position, hired_at, vacation_days_left)
+VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)
+RETURNING id, iin, password_hash, full_name, role, department_id, company, position, hired_at, vacation_days_left, created_at
+`
+
+type CreateUserParams struct {
+	Iin              string    `json:"iin"`
+	PasswordHash     string    `json:"password_hash"`
+	FullName         string    `json:"full_name"`
+	Role             string    `json:"role"`
+	DepartmentID     *int      `json:"department_id"`
+	Company          string    `json:"company"`
+	Position         string    `json:"position"`
+	HiredAt          time.Time `json:"hired_at"`
+	VacationDaysLeft int       `json:"vacation_days_left"`
+}
+
+func (q *Queries) CreateUser(ctx context.Context, arg CreateUserParams) (User, error) {
+	row := q.db.QueryRow(ctx, createUser,
+		arg.Iin,
+		arg.PasswordHash,
+		arg.FullName,
+		arg.Role,
+		arg.DepartmentID,
+		arg.Company,
+		arg.Position,
+		arg.HiredAt,
+		arg.VacationDaysLeft,
+	)
+	var i User
+	err := row.Scan(
+		&i.ID,
+		&i.Iin,
+		&i.PasswordHash,
+		&i.FullName,
+		&i.Role,
+		&i.DepartmentID,
+		&i.Company,
+		&i.Position,
+		&i.HiredAt,
+		&i.VacationDaysLeft,
+		&i.CreatedAt,
 	)
 	return i, err
 }
@@ -317,13 +432,13 @@ const deleteKB = `-- name: DeleteKB :exec
 DELETE FROM kb_documents WHERE id = $1
 `
 
-func (q *Queries) DeleteKB(ctx context.Context, id int32) error {
+func (q *Queries) DeleteKB(ctx context.Context, id int) error {
 	_, err := q.db.Exec(ctx, deleteKB, id)
 	return err
 }
 
 const getAssignment = `-- name: GetAssignment :one
-SELECT id, course_id, user_id, progress, score, assigned_by, assigned_at, completed_at FROM course_assignments WHERE course_id = $1 AND user_id = $2
+SELECT id, course_id, user_id, status, progress, score, assigned_at, completed_at FROM course_assignments WHERE course_id = $1 AND user_id = $2
 `
 
 type GetAssignmentParams struct {
@@ -338,9 +453,9 @@ func (q *Queries) GetAssignment(ctx context.Context, arg GetAssignmentParams) (C
 		&i.ID,
 		&i.CourseID,
 		&i.UserID,
+		&i.Status,
 		&i.Progress,
 		&i.Score,
-		&i.AssignedBy,
 		&i.AssignedAt,
 		&i.CompletedAt,
 	)
@@ -348,10 +463,10 @@ func (q *Queries) GetAssignment(ctx context.Context, arg GetAssignmentParams) (C
 }
 
 const getCourse = `-- name: GetCourse :one
-SELECT id, title_ru, title_kz, description_ru, description_kz, content_ru, content_kz FROM courses WHERE id = $1
+SELECT id, title_ru, title_kz, description_ru, description_kz FROM courses WHERE id = $1
 `
 
-func (q *Queries) GetCourse(ctx context.Context, id int32) (Course, error) {
+func (q *Queries) GetCourse(ctx context.Context, id int) (Course, error) {
 	row := q.db.QueryRow(ctx, getCourse, id)
 	var i Course
 	err := row.Scan(
@@ -360,32 +475,67 @@ func (q *Queries) GetCourse(ctx context.Context, id int32) (Course, error) {
 		&i.TitleKz,
 		&i.DescriptionRu,
 		&i.DescriptionKz,
-		&i.ContentRu,
-		&i.ContentKz,
+	)
+	return i, err
+}
+
+const getDepartment = `-- name: GetDepartment :one
+SELECT id, code, name_ru, name_kz, description_ru, description_kz FROM departments WHERE id = $1
+`
+
+func (q *Queries) GetDepartment(ctx context.Context, id int) (Department, error) {
+	row := q.db.QueryRow(ctx, getDepartment, id)
+	var i Department
+	err := row.Scan(
+		&i.ID,
+		&i.Code,
+		&i.NameRu,
+		&i.NameKz,
+		&i.DescriptionRu,
+		&i.DescriptionKz,
 	)
 	return i, err
 }
 
 const getRequest = `-- name: GetRequest :one
-SELECT r.id, r.type, r.user_id, r.department_id, r.date_from, r.date_to, r.days, r.amount, r.comment, r.status, r.created_at, u.full_name AS user_name FROM requests r JOIN users u ON u.id = r.user_id WHERE r.id = $1
+SELECT r.id, r.type, r.user_id, r.department_id, r.date_from, r.date_to, r.days_count, r.is_paid, r.amount, r.desired_date, r.document_url, r.comment, r.manager_comment, r.status, r.approved_by, r.approved_at, r.created_at, r.updated_at, u.full_name AS user_name, u.iin AS user_iin, u.role AS user_role,
+       d.name_ru AS dept_ru, d.name_kz AS dept_kz,
+       approver.full_name AS approver_name
+FROM requests r
+JOIN users u ON u.id = r.user_id
+JOIN departments d ON d.id = r.department_id
+LEFT JOIN users approver ON approver.id = r.approved_by
+WHERE r.id = $1
 `
 
 type GetRequestRow struct {
-	ID           int32      `json:"id"`
-	Type         string     `json:"type"`
-	UserID       int        `json:"user_id"`
-	DepartmentID int        `json:"department_id"`
-	DateFrom     *time.Time `json:"date_from"`
-	DateTo       *time.Time `json:"date_to"`
-	Days         int        `json:"days"`
-	Amount       float64    `json:"amount"`
-	Comment      string     `json:"comment"`
-	Status       string     `json:"status"`
-	CreatedAt    time.Time  `json:"created_at"`
-	UserName     string     `json:"user_name"`
+	ID             int        `json:"id"`
+	Type           string     `json:"type"`
+	UserID         int        `json:"user_id"`
+	DepartmentID   int        `json:"department_id"`
+	DateFrom       *time.Time `json:"date_from"`
+	DateTo         *time.Time `json:"date_to"`
+	DaysCount      int        `json:"days_count"`
+	IsPaid         bool       `json:"is_paid"`
+	Amount         float64    `json:"amount"`
+	DesiredDate    *time.Time `json:"desired_date"`
+	DocumentUrl    string     `json:"document_url"`
+	Comment        string     `json:"comment"`
+	ManagerComment string     `json:"manager_comment"`
+	Status         string     `json:"status"`
+	ApprovedBy     *int       `json:"approved_by"`
+	ApprovedAt     *time.Time `json:"approved_at"`
+	CreatedAt      time.Time  `json:"created_at"`
+	UpdatedAt      time.Time  `json:"updated_at"`
+	UserName       string     `json:"user_name"`
+	UserIin        string     `json:"user_iin"`
+	UserRole       string     `json:"user_role"`
+	DeptRu         string     `json:"dept_ru"`
+	DeptKz         string     `json:"dept_kz"`
+	ApproverName   *string    `json:"approver_name"`
 }
 
-func (q *Queries) GetRequest(ctx context.Context, id int32) (GetRequestRow, error) {
+func (q *Queries) GetRequest(ctx context.Context, id int) (GetRequestRow, error) {
 	row := q.db.QueryRow(ctx, getRequest, id)
 	var i GetRequestRow
 	err := row.Scan(
@@ -395,149 +545,177 @@ func (q *Queries) GetRequest(ctx context.Context, id int32) (GetRequestRow, erro
 		&i.DepartmentID,
 		&i.DateFrom,
 		&i.DateTo,
-		&i.Days,
+		&i.DaysCount,
+		&i.IsPaid,
 		&i.Amount,
+		&i.DesiredDate,
+		&i.DocumentUrl,
 		&i.Comment,
+		&i.ManagerComment,
 		&i.Status,
+		&i.ApprovedBy,
+		&i.ApprovedAt,
 		&i.CreatedAt,
+		&i.UpdatedAt,
 		&i.UserName,
+		&i.UserIin,
+		&i.UserRole,
+		&i.DeptRu,
+		&i.DeptKz,
+		&i.ApproverName,
 	)
 	return i, err
 }
 
 const getTask = `-- name: GetTask :one
-SELECT id, assignee_id, created_by, department_id, title, due_date, status FROM tasks WHERE id = $1
+SELECT id, title, description, department_id, created_by, assigned_to, due_date, status, created_at, updated_at FROM tasks WHERE id = $1
 `
 
-func (q *Queries) GetTask(ctx context.Context, id int32) (Task, error) {
+func (q *Queries) GetTask(ctx context.Context, id int) (Task, error) {
 	row := q.db.QueryRow(ctx, getTask, id)
 	var i Task
 	err := row.Scan(
 		&i.ID,
-		&i.AssigneeID,
-		&i.CreatedBy,
-		&i.DepartmentID,
 		&i.Title,
+		&i.Description,
+		&i.DepartmentID,
+		&i.CreatedBy,
+		&i.AssignedTo,
 		&i.DueDate,
 		&i.Status,
+		&i.CreatedAt,
+		&i.UpdatedAt,
 	)
 	return i, err
 }
 
 const getUser = `-- name: GetUser :one
-SELECT id, email, full_name, role, department_id, manager_id, company, position, hired_at, vacation_days_left, locale FROM users WHERE id = $1
+SELECT id, iin, password_hash, full_name, role, department_id, company, position, hired_at, vacation_days_left, created_at FROM users WHERE id = $1
 `
 
-func (q *Queries) GetUser(ctx context.Context, id int32) (User, error) {
+func (q *Queries) GetUser(ctx context.Context, id int) (User, error) {
 	row := q.db.QueryRow(ctx, getUser, id)
 	var i User
 	err := row.Scan(
 		&i.ID,
-		&i.Email,
+		&i.Iin,
+		&i.PasswordHash,
 		&i.FullName,
 		&i.Role,
 		&i.DepartmentID,
-		&i.ManagerID,
 		&i.Company,
 		&i.Position,
 		&i.HiredAt,
 		&i.VacationDaysLeft,
-		&i.Locale,
+		&i.CreatedAt,
 	)
 	return i, err
 }
 
-const getUserByEmail = `-- name: GetUserByEmail :one
-SELECT id, email, full_name, role, department_id, manager_id, company, position, hired_at, vacation_days_left, locale FROM users WHERE email = $1
+const getUserByIIN = `-- name: GetUserByIIN :one
+SELECT id, iin, password_hash, full_name, role, department_id, company, position, hired_at, vacation_days_left, created_at FROM users WHERE iin = $1
 `
 
-func (q *Queries) GetUserByEmail(ctx context.Context, email string) (User, error) {
-	row := q.db.QueryRow(ctx, getUserByEmail, email)
+func (q *Queries) GetUserByIIN(ctx context.Context, iin string) (User, error) {
+	row := q.db.QueryRow(ctx, getUserByIIN, iin)
 	var i User
 	err := row.Scan(
 		&i.ID,
-		&i.Email,
+		&i.Iin,
+		&i.PasswordHash,
 		&i.FullName,
 		&i.Role,
 		&i.DepartmentID,
-		&i.ManagerID,
 		&i.Company,
 		&i.Position,
 		&i.HiredAt,
 		&i.VacationDaysLeft,
-		&i.Locale,
+		&i.CreatedAt,
 	)
 	return i, err
 }
 
 const getUserProfile = `-- name: GetUserProfile :one
-SELECT u.id, u.email, u.full_name, u.role, u.department_id, u.manager_id, u.company, u.position, u.hired_at, u.vacation_days_left, u.locale, d.code AS dept_code, d.name_ru AS dept_ru, d.name_kz AS dept_kz,
-       COALESCE(m.full_name, '') AS manager_name
+SELECT u.id, u.iin, u.full_name, u.role, u.department_id, u.company, u.position,
+       u.hired_at, u.vacation_days_left, u.created_at,
+       d.code AS dept_code, d.name_ru AS dept_ru, d.name_kz AS dept_kz
 FROM users u
 LEFT JOIN departments d ON d.id = u.department_id
-LEFT JOIN users m ON m.id = u.manager_id
 WHERE u.id = $1
 `
 
 type GetUserProfileRow struct {
-	ID               int32     `json:"id"`
-	Email            string    `json:"email"`
+	ID               int       `json:"id"`
+	Iin              string    `json:"iin"`
 	FullName         string    `json:"full_name"`
 	Role             string    `json:"role"`
 	DepartmentID     *int      `json:"department_id"`
-	ManagerID        *int      `json:"manager_id"`
 	Company          string    `json:"company"`
 	Position         string    `json:"position"`
 	HiredAt          time.Time `json:"hired_at"`
 	VacationDaysLeft int       `json:"vacation_days_left"`
-	Locale           string    `json:"locale"`
+	CreatedAt        time.Time `json:"created_at"`
 	DeptCode         *string   `json:"dept_code"`
 	DeptRu           *string   `json:"dept_ru"`
 	DeptKz           *string   `json:"dept_kz"`
-	ManagerName      string    `json:"manager_name"`
 }
 
-func (q *Queries) GetUserProfile(ctx context.Context, id int32) (GetUserProfileRow, error) {
+func (q *Queries) GetUserProfile(ctx context.Context, id int) (GetUserProfileRow, error) {
 	row := q.db.QueryRow(ctx, getUserProfile, id)
 	var i GetUserProfileRow
 	err := row.Scan(
 		&i.ID,
-		&i.Email,
+		&i.Iin,
 		&i.FullName,
 		&i.Role,
 		&i.DepartmentID,
-		&i.ManagerID,
 		&i.Company,
 		&i.Position,
 		&i.HiredAt,
 		&i.VacationDaysLeft,
-		&i.Locale,
+		&i.CreatedAt,
 		&i.DeptCode,
 		&i.DeptRu,
 		&i.DeptKz,
-		&i.ManagerName,
 	)
 	return i, err
 }
 
 const listAllRequests = `-- name: ListAllRequests :many
-SELECT r.id, r.type, r.user_id, r.department_id, r.date_from, r.date_to, r.days, r.amount, r.comment, r.status, r.created_at, u.full_name AS user_name FROM requests r JOIN users u ON u.id = r.user_id
+SELECT r.id, r.type, r.user_id, r.department_id, r.date_from, r.date_to, r.days_count, r.is_paid, r.amount, r.desired_date, r.document_url, r.comment, r.manager_comment, r.status, r.approved_by, r.approved_at, r.created_at, r.updated_at, u.full_name AS user_name, u.position AS user_position,
+       d.name_ru AS dept_ru, d.name_kz AS dept_kz,
+       approver.full_name AS approver_name
+FROM requests r
+JOIN users u ON u.id = r.user_id
+JOIN departments d ON d.id = r.department_id
+LEFT JOIN users approver ON approver.id = r.approved_by
 ORDER BY r.created_at DESC
 `
 
 type ListAllRequestsRow struct {
-	ID           int32      `json:"id"`
-	Type         string     `json:"type"`
-	UserID       int        `json:"user_id"`
-	DepartmentID int        `json:"department_id"`
-	DateFrom     *time.Time `json:"date_from"`
-	DateTo       *time.Time `json:"date_to"`
-	Days         int        `json:"days"`
-	Amount       float64    `json:"amount"`
-	Comment      string     `json:"comment"`
-	Status       string     `json:"status"`
-	CreatedAt    time.Time  `json:"created_at"`
-	UserName     string     `json:"user_name"`
+	ID             int        `json:"id"`
+	Type           string     `json:"type"`
+	UserID         int        `json:"user_id"`
+	DepartmentID   int        `json:"department_id"`
+	DateFrom       *time.Time `json:"date_from"`
+	DateTo         *time.Time `json:"date_to"`
+	DaysCount      int        `json:"days_count"`
+	IsPaid         bool       `json:"is_paid"`
+	Amount         float64    `json:"amount"`
+	DesiredDate    *time.Time `json:"desired_date"`
+	DocumentUrl    string     `json:"document_url"`
+	Comment        string     `json:"comment"`
+	ManagerComment string     `json:"manager_comment"`
+	Status         string     `json:"status"`
+	ApprovedBy     *int       `json:"approved_by"`
+	ApprovedAt     *time.Time `json:"approved_at"`
+	CreatedAt      time.Time  `json:"created_at"`
+	UpdatedAt      time.Time  `json:"updated_at"`
+	UserName       string     `json:"user_name"`
+	UserPosition   string     `json:"user_position"`
+	DeptRu         string     `json:"dept_ru"`
+	DeptKz         string     `json:"dept_kz"`
+	ApproverName   *string    `json:"approver_name"`
 }
 
 func (q *Queries) ListAllRequests(ctx context.Context) ([]ListAllRequestsRow, error) {
@@ -556,57 +734,23 @@ func (q *Queries) ListAllRequests(ctx context.Context) ([]ListAllRequestsRow, er
 			&i.DepartmentID,
 			&i.DateFrom,
 			&i.DateTo,
-			&i.Days,
+			&i.DaysCount,
+			&i.IsPaid,
 			&i.Amount,
+			&i.DesiredDate,
+			&i.DocumentUrl,
 			&i.Comment,
+			&i.ManagerComment,
 			&i.Status,
+			&i.ApprovedBy,
+			&i.ApprovedAt,
 			&i.CreatedAt,
+			&i.UpdatedAt,
 			&i.UserName,
-		); err != nil {
-			return nil, err
-		}
-		items = append(items, i)
-	}
-	if err := rows.Err(); err != nil {
-		return nil, err
-	}
-	return items, nil
-}
-
-const listAllTasks = `-- name: ListAllTasks :many
-SELECT t.id, t.assignee_id, t.created_by, t.department_id, t.title, t.due_date, t.status, u.full_name AS creator_name FROM tasks t JOIN users u ON u.id = t.created_by
-ORDER BY t.due_date
-`
-
-type ListAllTasksRow struct {
-	ID           int32      `json:"id"`
-	AssigneeID   int        `json:"assignee_id"`
-	CreatedBy    int        `json:"created_by"`
-	DepartmentID int        `json:"department_id"`
-	Title        string     `json:"title"`
-	DueDate      *time.Time `json:"due_date"`
-	Status       string     `json:"status"`
-	CreatorName  string     `json:"creator_name"`
-}
-
-func (q *Queries) ListAllTasks(ctx context.Context) ([]ListAllTasksRow, error) {
-	rows, err := q.db.Query(ctx, listAllTasks)
-	if err != nil {
-		return nil, err
-	}
-	defer rows.Close()
-	var items []ListAllTasksRow
-	for rows.Next() {
-		var i ListAllTasksRow
-		if err := rows.Scan(
-			&i.ID,
-			&i.AssigneeID,
-			&i.CreatedBy,
-			&i.DepartmentID,
-			&i.Title,
-			&i.DueDate,
-			&i.Status,
-			&i.CreatorName,
+			&i.UserPosition,
+			&i.DeptRu,
+			&i.DeptKz,
+			&i.ApproverName,
 		); err != nil {
 			return nil, err
 		}
@@ -619,30 +763,53 @@ func (q *Queries) ListAllTasks(ctx context.Context) ([]ListAllTasksRow, error) {
 }
 
 const listAllUsers = `-- name: ListAllUsers :many
-SELECT id, email, full_name, role, department_id, manager_id, company, position, hired_at, vacation_days_left, locale FROM users ORDER BY full_name
+SELECT u.id, u.iin, u.full_name, u.role, u.department_id, u.company, u.position,
+       u.hired_at, u.vacation_days_left, u.created_at,
+       d.code AS dept_code, d.name_ru AS dept_ru, d.name_kz AS dept_kz
+FROM users u
+LEFT JOIN departments d ON d.id = u.department_id
+ORDER BY u.id DESC
 `
 
-func (q *Queries) ListAllUsers(ctx context.Context) ([]User, error) {
+type ListAllUsersRow struct {
+	ID               int       `json:"id"`
+	Iin              string    `json:"iin"`
+	FullName         string    `json:"full_name"`
+	Role             string    `json:"role"`
+	DepartmentID     *int      `json:"department_id"`
+	Company          string    `json:"company"`
+	Position         string    `json:"position"`
+	HiredAt          time.Time `json:"hired_at"`
+	VacationDaysLeft int       `json:"vacation_days_left"`
+	CreatedAt        time.Time `json:"created_at"`
+	DeptCode         *string   `json:"dept_code"`
+	DeptRu           *string   `json:"dept_ru"`
+	DeptKz           *string   `json:"dept_kz"`
+}
+
+func (q *Queries) ListAllUsers(ctx context.Context) ([]ListAllUsersRow, error) {
 	rows, err := q.db.Query(ctx, listAllUsers)
 	if err != nil {
 		return nil, err
 	}
 	defer rows.Close()
-	var items []User
+	var items []ListAllUsersRow
 	for rows.Next() {
-		var i User
+		var i ListAllUsersRow
 		if err := rows.Scan(
 			&i.ID,
-			&i.Email,
+			&i.Iin,
 			&i.FullName,
 			&i.Role,
 			&i.DepartmentID,
-			&i.ManagerID,
 			&i.Company,
 			&i.Position,
 			&i.HiredAt,
 			&i.VacationDaysLeft,
-			&i.Locale,
+			&i.CreatedAt,
+			&i.DeptCode,
+			&i.DeptRu,
+			&i.DeptKz,
 		); err != nil {
 			return nil, err
 		}
@@ -655,18 +822,20 @@ func (q *Queries) ListAllUsers(ctx context.Context) ([]User, error) {
 }
 
 const listAssignmentsByUser = `-- name: ListAssignmentsByUser :many
-SELECT a.id, a.course_id, a.user_id, a.progress, a.score, a.assigned_by, a.assigned_at, a.completed_at, c.title_ru, c.title_kz, c.description_ru, c.description_kz
-FROM course_assignments a JOIN courses c ON c.id = a.course_id
-WHERE a.user_id = $1 ORDER BY a.assigned_at DESC
+SELECT a.id, a.course_id, a.user_id, a.status, a.progress, a.score, a.assigned_at, a.completed_at, c.title_ru, c.title_kz, c.description_ru, c.description_kz
+FROM course_assignments a
+JOIN courses c ON c.id = a.course_id
+WHERE a.user_id = $1
+ORDER BY a.assigned_at DESC
 `
 
 type ListAssignmentsByUserRow struct {
-	ID            int32      `json:"id"`
+	ID            int        `json:"id"`
 	CourseID      int        `json:"course_id"`
 	UserID        int        `json:"user_id"`
+	Status        string     `json:"status"`
 	Progress      int        `json:"progress"`
 	Score         *int       `json:"score"`
-	AssignedBy    *int       `json:"assigned_by"`
 	AssignedAt    time.Time  `json:"assigned_at"`
 	CompletedAt   *time.Time `json:"completed_at"`
 	TitleRu       string     `json:"title_ru"`
@@ -688,9 +857,9 @@ func (q *Queries) ListAssignmentsByUser(ctx context.Context, userID int) ([]List
 			&i.ID,
 			&i.CourseID,
 			&i.UserID,
+			&i.Status,
 			&i.Progress,
 			&i.Score,
-			&i.AssignedBy,
 			&i.AssignedAt,
 			&i.CompletedAt,
 			&i.TitleRu,
@@ -709,7 +878,7 @@ func (q *Queries) ListAssignmentsByUser(ctx context.Context, userID int) ([]List
 }
 
 const listCourses = `-- name: ListCourses :many
-SELECT id, title_ru, title_kz, description_ru, description_kz, content_ru, content_kz FROM courses ORDER BY id
+SELECT id, title_ru, title_kz, description_ru, description_kz FROM courses ORDER BY id
 `
 
 func (q *Queries) ListCourses(ctx context.Context) ([]Course, error) {
@@ -727,8 +896,6 @@ func (q *Queries) ListCourses(ctx context.Context) ([]Course, error) {
 			&i.TitleKz,
 			&i.DescriptionRu,
 			&i.DescriptionKz,
-			&i.ContentRu,
-			&i.ContentKz,
 		); err != nil {
 			return nil, err
 		}
@@ -740,39 +907,43 @@ func (q *Queries) ListCourses(ctx context.Context) ([]Course, error) {
 	return items, nil
 }
 
-const listDemoUsers = `-- name: ListDemoUsers :many
-SELECT u.id, u.email, u.full_name, u.role, u.position, d.name_ru AS dept_ru, d.name_kz AS dept_kz
-FROM users u LEFT JOIN departments d ON d.id = u.department_id
-ORDER BY u.role DESC, u.id
+const listDepartmentAcademyProgress = `-- name: ListDepartmentAcademyProgress :many
+SELECT u.id AS user_id, u.full_name, u.position,
+       COUNT(ca.id)::int AS total_courses,
+       COUNT(ca.id) FILTER (WHERE ca.status = 'completed')::int AS completed_courses,
+       COALESCE(AVG(ca.progress), 0)::float8 AS avg_progress
+FROM users u
+LEFT JOIN course_assignments ca ON ca.user_id = u.id
+WHERE u.department_id = $1
+GROUP BY u.id, u.full_name, u.position
+ORDER BY u.full_name
 `
 
-type ListDemoUsersRow struct {
-	ID       int32   `json:"id"`
-	Email    string  `json:"email"`
-	FullName string  `json:"full_name"`
-	Role     string  `json:"role"`
-	Position string  `json:"position"`
-	DeptRu   *string `json:"dept_ru"`
-	DeptKz   *string `json:"dept_kz"`
+type ListDepartmentAcademyProgressRow struct {
+	UserID           int     `json:"user_id"`
+	FullName         string  `json:"full_name"`
+	Position         string  `json:"position"`
+	TotalCourses     int     `json:"total_courses"`
+	CompletedCourses int     `json:"completed_courses"`
+	AvgProgress      float64 `json:"avg_progress"`
 }
 
-func (q *Queries) ListDemoUsers(ctx context.Context) ([]ListDemoUsersRow, error) {
-	rows, err := q.db.Query(ctx, listDemoUsers)
+func (q *Queries) ListDepartmentAcademyProgress(ctx context.Context, departmentID *int) ([]ListDepartmentAcademyProgressRow, error) {
+	rows, err := q.db.Query(ctx, listDepartmentAcademyProgress, departmentID)
 	if err != nil {
 		return nil, err
 	}
 	defer rows.Close()
-	var items []ListDemoUsersRow
+	var items []ListDepartmentAcademyProgressRow
 	for rows.Next() {
-		var i ListDemoUsersRow
+		var i ListDepartmentAcademyProgressRow
 		if err := rows.Scan(
-			&i.ID,
-			&i.Email,
+			&i.UserID,
 			&i.FullName,
-			&i.Role,
 			&i.Position,
-			&i.DeptRu,
-			&i.DeptKz,
+			&i.TotalCourses,
+			&i.CompletedCourses,
+			&i.AvgProgress,
 		); err != nil {
 			return nil, err
 		}
@@ -816,13 +987,14 @@ func (q *Queries) ListDepartments(ctx context.Context) ([]Department, error) {
 }
 
 const listEscalations = `-- name: ListEscalations :many
-SELECT e.id, e.user_id, e.question, e.created_at, u.full_name FROM ai_escalations e JOIN users u ON u.id = e.user_id ORDER BY e.created_at DESC
+SELECT e.id, e.user_id, e.question, e.status, e.created_at, u.full_name FROM ai_escalations e JOIN users u ON u.id = e.user_id ORDER BY e.created_at DESC
 `
 
 type ListEscalationsRow struct {
-	ID        int32     `json:"id"`
+	ID        int       `json:"id"`
 	UserID    int       `json:"user_id"`
 	Question  string    `json:"question"`
+	Status    string    `json:"status"`
 	CreatedAt time.Time `json:"created_at"`
 	FullName  string    `json:"full_name"`
 }
@@ -840,52 +1012,9 @@ func (q *Queries) ListEscalations(ctx context.Context) ([]ListEscalationsRow, er
 			&i.ID,
 			&i.UserID,
 			&i.Question,
+			&i.Status,
 			&i.CreatedAt,
 			&i.FullName,
-		); err != nil {
-			return nil, err
-		}
-		items = append(items, i)
-	}
-	if err := rows.Err(); err != nil {
-		return nil, err
-	}
-	return items, nil
-}
-
-const listHistory = `-- name: ListHistory :many
-SELECT h.id, h.request_id, h.status, h.actor_id, h.note, h.at, COALESCE(u.full_name,'System') AS actor_name
-FROM request_history h LEFT JOIN users u ON u.id = h.actor_id
-WHERE h.request_id = $1 ORDER BY h.at, h.id
-`
-
-type ListHistoryRow struct {
-	ID        int32     `json:"id"`
-	RequestID int       `json:"request_id"`
-	Status    string    `json:"status"`
-	ActorID   *int      `json:"actor_id"`
-	Note      string    `json:"note"`
-	At        time.Time `json:"at"`
-	ActorName string    `json:"actor_name"`
-}
-
-func (q *Queries) ListHistory(ctx context.Context, requestID int) ([]ListHistoryRow, error) {
-	rows, err := q.db.Query(ctx, listHistory, requestID)
-	if err != nil {
-		return nil, err
-	}
-	defer rows.Close()
-	var items []ListHistoryRow
-	for rows.Next() {
-		var i ListHistoryRow
-		if err := rows.Scan(
-			&i.ID,
-			&i.RequestID,
-			&i.Status,
-			&i.ActorID,
-			&i.Note,
-			&i.At,
-			&i.ActorName,
 		); err != nil {
 			return nil, err
 		}
@@ -930,7 +1059,7 @@ func (q *Queries) ListKB(ctx context.Context) ([]KbDocument, error) {
 }
 
 const listNotifications = `-- name: ListNotifications :many
-SELECT id, user_id, kind, title_ru, title_kz, link, read, created_at FROM notifications WHERE user_id = $1 ORDER BY created_at DESC LIMIT 50
+SELECT id, user_id, kind, title, message, link, read, created_at FROM notifications WHERE user_id = $1 ORDER BY created_at DESC LIMIT 50
 `
 
 func (q *Queries) ListNotifications(ctx context.Context, userID int) ([]Notification, error) {
@@ -946,8 +1075,8 @@ func (q *Queries) ListNotifications(ctx context.Context, userID int) ([]Notifica
 			&i.ID,
 			&i.UserID,
 			&i.Kind,
-			&i.TitleRu,
-			&i.TitleKz,
+			&i.Title,
+			&i.Message,
 			&i.Link,
 			&i.Read,
 			&i.CreatedAt,
@@ -994,24 +1123,88 @@ func (q *Queries) ListQuestions(ctx context.Context, courseID int) ([]QuizQuesti
 	return items, nil
 }
 
+const listRequestHistory = `-- name: ListRequestHistory :many
+SELECT h.id, h.request_id, h.status, h.actor_id, h.comment, h.created_at, COALESCE(u.full_name, 'Система') AS actor_name
+FROM request_history h
+LEFT JOIN users u ON u.id = h.actor_id
+WHERE h.request_id = $1
+ORDER BY h.created_at ASC, h.id ASC
+`
+
+type ListRequestHistoryRow struct {
+	ID        int       `json:"id"`
+	RequestID int       `json:"request_id"`
+	Status    string    `json:"status"`
+	ActorID   *int      `json:"actor_id"`
+	Comment   string    `json:"comment"`
+	CreatedAt time.Time `json:"created_at"`
+	ActorName string    `json:"actor_name"`
+}
+
+func (q *Queries) ListRequestHistory(ctx context.Context, requestID int) ([]ListRequestHistoryRow, error) {
+	rows, err := q.db.Query(ctx, listRequestHistory, requestID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []ListRequestHistoryRow
+	for rows.Next() {
+		var i ListRequestHistoryRow
+		if err := rows.Scan(
+			&i.ID,
+			&i.RequestID,
+			&i.Status,
+			&i.ActorID,
+			&i.Comment,
+			&i.CreatedAt,
+			&i.ActorName,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
 const listRequestsByDepartment = `-- name: ListRequestsByDepartment :many
-SELECT r.id, r.type, r.user_id, r.department_id, r.date_from, r.date_to, r.days, r.amount, r.comment, r.status, r.created_at, u.full_name AS user_name FROM requests r JOIN users u ON u.id = r.user_id
-WHERE r.department_id = $1 ORDER BY r.created_at DESC
+SELECT r.id, r.type, r.user_id, r.department_id, r.date_from, r.date_to, r.days_count, r.is_paid, r.amount, r.desired_date, r.document_url, r.comment, r.manager_comment, r.status, r.approved_by, r.approved_at, r.created_at, r.updated_at, u.full_name AS user_name, u.position AS user_position,
+       d.name_ru AS dept_ru, d.name_kz AS dept_kz,
+       approver.full_name AS approver_name
+FROM requests r
+JOIN users u ON u.id = r.user_id
+JOIN departments d ON d.id = r.department_id
+LEFT JOIN users approver ON approver.id = r.approved_by
+WHERE r.department_id = $1
+ORDER BY r.created_at DESC
 `
 
 type ListRequestsByDepartmentRow struct {
-	ID           int32      `json:"id"`
-	Type         string     `json:"type"`
-	UserID       int        `json:"user_id"`
-	DepartmentID int        `json:"department_id"`
-	DateFrom     *time.Time `json:"date_from"`
-	DateTo       *time.Time `json:"date_to"`
-	Days         int        `json:"days"`
-	Amount       float64    `json:"amount"`
-	Comment      string     `json:"comment"`
-	Status       string     `json:"status"`
-	CreatedAt    time.Time  `json:"created_at"`
-	UserName     string     `json:"user_name"`
+	ID             int        `json:"id"`
+	Type           string     `json:"type"`
+	UserID         int        `json:"user_id"`
+	DepartmentID   int        `json:"department_id"`
+	DateFrom       *time.Time `json:"date_from"`
+	DateTo         *time.Time `json:"date_to"`
+	DaysCount      int        `json:"days_count"`
+	IsPaid         bool       `json:"is_paid"`
+	Amount         float64    `json:"amount"`
+	DesiredDate    *time.Time `json:"desired_date"`
+	DocumentUrl    string     `json:"document_url"`
+	Comment        string     `json:"comment"`
+	ManagerComment string     `json:"manager_comment"`
+	Status         string     `json:"status"`
+	ApprovedBy     *int       `json:"approved_by"`
+	ApprovedAt     *time.Time `json:"approved_at"`
+	CreatedAt      time.Time  `json:"created_at"`
+	UpdatedAt      time.Time  `json:"updated_at"`
+	UserName       string     `json:"user_name"`
+	UserPosition   string     `json:"user_position"`
+	DeptRu         string     `json:"dept_ru"`
+	DeptKz         string     `json:"dept_kz"`
+	ApproverName   *string    `json:"approver_name"`
 }
 
 func (q *Queries) ListRequestsByDepartment(ctx context.Context, departmentID int) ([]ListRequestsByDepartmentRow, error) {
@@ -1030,12 +1223,23 @@ func (q *Queries) ListRequestsByDepartment(ctx context.Context, departmentID int
 			&i.DepartmentID,
 			&i.DateFrom,
 			&i.DateTo,
-			&i.Days,
+			&i.DaysCount,
+			&i.IsPaid,
 			&i.Amount,
+			&i.DesiredDate,
+			&i.DocumentUrl,
 			&i.Comment,
+			&i.ManagerComment,
 			&i.Status,
+			&i.ApprovedBy,
+			&i.ApprovedAt,
 			&i.CreatedAt,
+			&i.UpdatedAt,
 			&i.UserName,
+			&i.UserPosition,
+			&i.DeptRu,
+			&i.DeptKz,
+			&i.ApproverName,
 		); err != nil {
 			return nil, err
 		}
@@ -1048,23 +1252,39 @@ func (q *Queries) ListRequestsByDepartment(ctx context.Context, departmentID int
 }
 
 const listRequestsByUser = `-- name: ListRequestsByUser :many
-SELECT r.id, r.type, r.user_id, r.department_id, r.date_from, r.date_to, r.days, r.amount, r.comment, r.status, r.created_at, u.full_name AS user_name FROM requests r JOIN users u ON u.id = r.user_id
-WHERE r.user_id = $1 ORDER BY r.created_at DESC
+SELECT r.id, r.type, r.user_id, r.department_id, r.date_from, r.date_to, r.days_count, r.is_paid, r.amount, r.desired_date, r.document_url, r.comment, r.manager_comment, r.status, r.approved_by, r.approved_at, r.created_at, r.updated_at, u.full_name AS user_name, d.name_ru AS dept_ru, d.name_kz AS dept_kz,
+       approver.full_name AS approver_name
+FROM requests r
+JOIN users u ON u.id = r.user_id
+JOIN departments d ON d.id = r.department_id
+LEFT JOIN users approver ON approver.id = r.approved_by
+WHERE r.user_id = $1
+ORDER BY r.created_at DESC
 `
 
 type ListRequestsByUserRow struct {
-	ID           int32      `json:"id"`
-	Type         string     `json:"type"`
-	UserID       int        `json:"user_id"`
-	DepartmentID int        `json:"department_id"`
-	DateFrom     *time.Time `json:"date_from"`
-	DateTo       *time.Time `json:"date_to"`
-	Days         int        `json:"days"`
-	Amount       float64    `json:"amount"`
-	Comment      string     `json:"comment"`
-	Status       string     `json:"status"`
-	CreatedAt    time.Time  `json:"created_at"`
-	UserName     string     `json:"user_name"`
+	ID             int        `json:"id"`
+	Type           string     `json:"type"`
+	UserID         int        `json:"user_id"`
+	DepartmentID   int        `json:"department_id"`
+	DateFrom       *time.Time `json:"date_from"`
+	DateTo         *time.Time `json:"date_to"`
+	DaysCount      int        `json:"days_count"`
+	IsPaid         bool       `json:"is_paid"`
+	Amount         float64    `json:"amount"`
+	DesiredDate    *time.Time `json:"desired_date"`
+	DocumentUrl    string     `json:"document_url"`
+	Comment        string     `json:"comment"`
+	ManagerComment string     `json:"manager_comment"`
+	Status         string     `json:"status"`
+	ApprovedBy     *int       `json:"approved_by"`
+	ApprovedAt     *time.Time `json:"approved_at"`
+	CreatedAt      time.Time  `json:"created_at"`
+	UpdatedAt      time.Time  `json:"updated_at"`
+	UserName       string     `json:"user_name"`
+	DeptRu         string     `json:"dept_ru"`
+	DeptKz         string     `json:"dept_kz"`
+	ApproverName   *string    `json:"approver_name"`
 }
 
 func (q *Queries) ListRequestsByUser(ctx context.Context, userID int) ([]ListRequestsByUserRow, error) {
@@ -1083,12 +1303,22 @@ func (q *Queries) ListRequestsByUser(ctx context.Context, userID int) ([]ListReq
 			&i.DepartmentID,
 			&i.DateFrom,
 			&i.DateTo,
-			&i.Days,
+			&i.DaysCount,
+			&i.IsPaid,
 			&i.Amount,
+			&i.DesiredDate,
+			&i.DocumentUrl,
 			&i.Comment,
+			&i.ManagerComment,
 			&i.Status,
+			&i.ApprovedBy,
+			&i.ApprovedAt,
 			&i.CreatedAt,
+			&i.UpdatedAt,
 			&i.UserName,
+			&i.DeptRu,
+			&i.DeptKz,
+			&i.ApproverName,
 		); err != nil {
 			return nil, err
 		}
@@ -1101,19 +1331,27 @@ func (q *Queries) ListRequestsByUser(ctx context.Context, userID int) ([]ListReq
 }
 
 const listTasksByDepartment = `-- name: ListTasksByDepartment :many
-SELECT t.id, t.assignee_id, t.created_by, t.department_id, t.title, t.due_date, t.status, u.full_name AS creator_name FROM tasks t JOIN users u ON u.id = t.created_by
-WHERE t.department_id = $1 ORDER BY t.due_date
+SELECT t.id, t.title, t.description, t.department_id, t.created_by, t.assigned_to, t.due_date, t.status, t.created_at, t.updated_at, creator.full_name AS creator_name, assignee.full_name AS assignee_name
+FROM tasks t
+JOIN users creator ON creator.id = t.created_by
+JOIN users assignee ON assignee.id = t.assigned_to
+WHERE t.department_id = $1
+ORDER BY t.due_date NULLS LAST, t.id DESC
 `
 
 type ListTasksByDepartmentRow struct {
-	ID           int32      `json:"id"`
-	AssigneeID   int        `json:"assignee_id"`
-	CreatedBy    int        `json:"created_by"`
-	DepartmentID int        `json:"department_id"`
+	ID           int        `json:"id"`
 	Title        string     `json:"title"`
+	Description  string     `json:"description"`
+	DepartmentID int        `json:"department_id"`
+	CreatedBy    int        `json:"created_by"`
+	AssignedTo   int        `json:"assigned_to"`
 	DueDate      *time.Time `json:"due_date"`
 	Status       string     `json:"status"`
+	CreatedAt    time.Time  `json:"created_at"`
+	UpdatedAt    time.Time  `json:"updated_at"`
 	CreatorName  string     `json:"creator_name"`
+	AssigneeName string     `json:"assignee_name"`
 }
 
 func (q *Queries) ListTasksByDepartment(ctx context.Context, departmentID int) ([]ListTasksByDepartmentRow, error) {
@@ -1127,13 +1365,17 @@ func (q *Queries) ListTasksByDepartment(ctx context.Context, departmentID int) (
 		var i ListTasksByDepartmentRow
 		if err := rows.Scan(
 			&i.ID,
-			&i.AssigneeID,
-			&i.CreatedBy,
-			&i.DepartmentID,
 			&i.Title,
+			&i.Description,
+			&i.DepartmentID,
+			&i.CreatedBy,
+			&i.AssignedTo,
 			&i.DueDate,
 			&i.Status,
+			&i.CreatedAt,
+			&i.UpdatedAt,
 			&i.CreatorName,
+			&i.AssigneeName,
 		); err != nil {
 			return nil, err
 		}
@@ -1146,23 +1388,29 @@ func (q *Queries) ListTasksByDepartment(ctx context.Context, departmentID int) (
 }
 
 const listTasksByUser = `-- name: ListTasksByUser :many
-SELECT t.id, t.assignee_id, t.created_by, t.department_id, t.title, t.due_date, t.status, u.full_name AS creator_name FROM tasks t JOIN users u ON u.id = t.created_by
-WHERE t.assignee_id = $1 ORDER BY t.due_date
+SELECT t.id, t.title, t.description, t.department_id, t.created_by, t.assigned_to, t.due_date, t.status, t.created_at, t.updated_at, u.full_name AS creator_name
+FROM tasks t
+JOIN users u ON u.id = t.created_by
+WHERE t.assigned_to = $1
+ORDER BY t.due_date NULLS LAST, t.id DESC
 `
 
 type ListTasksByUserRow struct {
-	ID           int32      `json:"id"`
-	AssigneeID   int        `json:"assignee_id"`
-	CreatedBy    int        `json:"created_by"`
-	DepartmentID int        `json:"department_id"`
+	ID           int        `json:"id"`
 	Title        string     `json:"title"`
+	Description  string     `json:"description"`
+	DepartmentID int        `json:"department_id"`
+	CreatedBy    int        `json:"created_by"`
+	AssignedTo   int        `json:"assigned_to"`
 	DueDate      *time.Time `json:"due_date"`
 	Status       string     `json:"status"`
+	CreatedAt    time.Time  `json:"created_at"`
+	UpdatedAt    time.Time  `json:"updated_at"`
 	CreatorName  string     `json:"creator_name"`
 }
 
-func (q *Queries) ListTasksByUser(ctx context.Context, assigneeID int) ([]ListTasksByUserRow, error) {
-	rows, err := q.db.Query(ctx, listTasksByUser, assigneeID)
+func (q *Queries) ListTasksByUser(ctx context.Context, assignedTo int) ([]ListTasksByUserRow, error) {
+	rows, err := q.db.Query(ctx, listTasksByUser, assignedTo)
 	if err != nil {
 		return nil, err
 	}
@@ -1172,12 +1420,15 @@ func (q *Queries) ListTasksByUser(ctx context.Context, assigneeID int) ([]ListTa
 		var i ListTasksByUserRow
 		if err := rows.Scan(
 			&i.ID,
-			&i.AssigneeID,
-			&i.CreatedBy,
-			&i.DepartmentID,
 			&i.Title,
+			&i.Description,
+			&i.DepartmentID,
+			&i.CreatedBy,
+			&i.AssignedTo,
 			&i.DueDate,
 			&i.Status,
+			&i.CreatedAt,
+			&i.UpdatedAt,
 			&i.CreatorName,
 		); err != nil {
 			return nil, err
@@ -1190,36 +1441,55 @@ func (q *Queries) ListTasksByUser(ctx context.Context, assigneeID int) ([]ListTa
 	return items, nil
 }
 
-const listTeam = `-- name: ListTeam :many
-SELECT id, email, full_name, role, department_id, manager_id, company, position, hired_at, vacation_days_left, locale FROM users WHERE department_id = $1 AND id <> $2 ORDER BY full_name
+const listUsersByDepartment = `-- name: ListUsersByDepartment :many
+SELECT u.id, u.iin, u.full_name, u.role, u.department_id, u.company, u.position,
+       u.hired_at, u.vacation_days_left, u.created_at,
+       d.code AS dept_code, d.name_ru AS dept_ru, d.name_kz AS dept_kz
+FROM users u
+LEFT JOIN departments d ON d.id = u.department_id
+WHERE u.department_id = $1
+ORDER BY u.full_name
 `
 
-type ListTeamParams struct {
-	DepartmentID *int  `json:"department_id"`
-	ID           int32 `json:"id"`
+type ListUsersByDepartmentRow struct {
+	ID               int       `json:"id"`
+	Iin              string    `json:"iin"`
+	FullName         string    `json:"full_name"`
+	Role             string    `json:"role"`
+	DepartmentID     *int      `json:"department_id"`
+	Company          string    `json:"company"`
+	Position         string    `json:"position"`
+	HiredAt          time.Time `json:"hired_at"`
+	VacationDaysLeft int       `json:"vacation_days_left"`
+	CreatedAt        time.Time `json:"created_at"`
+	DeptCode         *string   `json:"dept_code"`
+	DeptRu           *string   `json:"dept_ru"`
+	DeptKz           *string   `json:"dept_kz"`
 }
 
-func (q *Queries) ListTeam(ctx context.Context, arg ListTeamParams) ([]User, error) {
-	rows, err := q.db.Query(ctx, listTeam, arg.DepartmentID, arg.ID)
+func (q *Queries) ListUsersByDepartment(ctx context.Context, departmentID *int) ([]ListUsersByDepartmentRow, error) {
+	rows, err := q.db.Query(ctx, listUsersByDepartment, departmentID)
 	if err != nil {
 		return nil, err
 	}
 	defer rows.Close()
-	var items []User
+	var items []ListUsersByDepartmentRow
 	for rows.Next() {
-		var i User
+		var i ListUsersByDepartmentRow
 		if err := rows.Scan(
 			&i.ID,
-			&i.Email,
+			&i.Iin,
 			&i.FullName,
 			&i.Role,
 			&i.DepartmentID,
-			&i.ManagerID,
 			&i.Company,
 			&i.Position,
 			&i.HiredAt,
 			&i.VacationDaysLeft,
-			&i.Locale,
+			&i.CreatedAt,
+			&i.DeptCode,
+			&i.DeptRu,
+			&i.DeptKz,
 		); err != nil {
 			return nil, err
 		}
@@ -1231,12 +1501,12 @@ func (q *Queries) ListTeam(ctx context.Context, arg ListTeamParams) ([]User, err
 	return items, nil
 }
 
-const markAllRead = `-- name: MarkAllRead :exec
+const markAllNotificationsRead = `-- name: MarkAllNotificationsRead :exec
 UPDATE notifications SET read = true WHERE user_id = $1
 `
 
-func (q *Queries) MarkAllRead(ctx context.Context, userID int) error {
-	_, err := q.db.Exec(ctx, markAllRead, userID)
+func (q *Queries) MarkAllNotificationsRead(ctx context.Context, userID int) error {
+	_, err := q.db.Exec(ctx, markAllNotificationsRead, userID)
 	return err
 }
 
@@ -1245,8 +1515,8 @@ UPDATE notifications SET read = true WHERE id = $1 AND user_id = $2
 `
 
 type MarkNotificationReadParams struct {
-	ID     int32 `json:"id"`
-	UserID int   `json:"user_id"`
+	ID     int `json:"id"`
+	UserID int `json:"user_id"`
 }
 
 func (q *Queries) MarkNotificationRead(ctx context.Context, arg MarkNotificationReadParams) error {
@@ -1254,55 +1524,57 @@ func (q *Queries) MarkNotificationRead(ctx context.Context, arg MarkNotification
 	return err
 }
 
-const updateLocale = `-- name: UpdateLocale :exec
-UPDATE users SET locale = $2 WHERE id = $1
+const updateRequestDecision = `-- name: UpdateRequestDecision :one
+UPDATE requests
+SET status = $2, manager_comment = $3, approved_by = $4, approved_at = now(), updated_at = now()
+WHERE id = $1
+RETURNING id, type, user_id, department_id, date_from, date_to, days_count, is_paid, amount, desired_date, document_url, comment, manager_comment, status, approved_by, approved_at, created_at, updated_at
 `
 
-type UpdateLocaleParams struct {
-	ID     int32  `json:"id"`
-	Locale string `json:"locale"`
+type UpdateRequestDecisionParams struct {
+	ID             int    `json:"id"`
+	Status         string `json:"status"`
+	ManagerComment string `json:"manager_comment"`
+	ApprovedBy     *int   `json:"approved_by"`
 }
 
-func (q *Queries) UpdateLocale(ctx context.Context, arg UpdateLocaleParams) error {
-	_, err := q.db.Exec(ctx, updateLocale, arg.ID, arg.Locale)
-	return err
-}
-
-const updateProgress = `-- name: UpdateProgress :exec
-UPDATE course_assignments SET progress = $3 WHERE course_id = $1 AND user_id = $2 AND progress < $3
-`
-
-type UpdateProgressParams struct {
-	CourseID int `json:"course_id"`
-	UserID   int `json:"user_id"`
-	Progress int `json:"progress"`
-}
-
-func (q *Queries) UpdateProgress(ctx context.Context, arg UpdateProgressParams) error {
-	_, err := q.db.Exec(ctx, updateProgress, arg.CourseID, arg.UserID, arg.Progress)
-	return err
-}
-
-const updateRequestStatus = `-- name: UpdateRequestStatus :exec
-UPDATE requests SET status = $2 WHERE id = $1
-`
-
-type UpdateRequestStatusParams struct {
-	ID     int32  `json:"id"`
-	Status string `json:"status"`
-}
-
-func (q *Queries) UpdateRequestStatus(ctx context.Context, arg UpdateRequestStatusParams) error {
-	_, err := q.db.Exec(ctx, updateRequestStatus, arg.ID, arg.Status)
-	return err
+func (q *Queries) UpdateRequestDecision(ctx context.Context, arg UpdateRequestDecisionParams) (Request, error) {
+	row := q.db.QueryRow(ctx, updateRequestDecision,
+		arg.ID,
+		arg.Status,
+		arg.ManagerComment,
+		arg.ApprovedBy,
+	)
+	var i Request
+	err := row.Scan(
+		&i.ID,
+		&i.Type,
+		&i.UserID,
+		&i.DepartmentID,
+		&i.DateFrom,
+		&i.DateTo,
+		&i.DaysCount,
+		&i.IsPaid,
+		&i.Amount,
+		&i.DesiredDate,
+		&i.DocumentUrl,
+		&i.Comment,
+		&i.ManagerComment,
+		&i.Status,
+		&i.ApprovedBy,
+		&i.ApprovedAt,
+		&i.CreatedAt,
+		&i.UpdatedAt,
+	)
+	return i, err
 }
 
 const updateTaskStatus = `-- name: UpdateTaskStatus :exec
-UPDATE tasks SET status = $2 WHERE id = $1
+UPDATE tasks SET status = $2, updated_at = now() WHERE id = $1
 `
 
 type UpdateTaskStatusParams struct {
-	ID     int32  `json:"id"`
+	ID     int    `json:"id"`
 	Status string `json:"status"`
 }
 
@@ -1316,8 +1588,8 @@ UPDATE users SET vacation_days_left = $2 WHERE id = $1
 `
 
 type UpdateVacationDaysParams struct {
-	ID               int32 `json:"id"`
-	VacationDaysLeft int   `json:"vacation_days_left"`
+	ID               int `json:"id"`
+	VacationDaysLeft int `json:"vacation_days_left"`
 }
 
 func (q *Queries) UpdateVacationDays(ctx context.Context, arg UpdateVacationDaysParams) error {

@@ -1,8 +1,8 @@
--- JanaMen schema (also used by sqlc as schema source)
+-- Clean schema setup for JanaMen Digital HR platform
 
 CREATE TABLE IF NOT EXISTS departments (
   id SERIAL PRIMARY KEY,
-  code TEXT NOT NULL UNIQUE,
+  code VARCHAR(50) NOT NULL UNIQUE,
   name_ru TEXT NOT NULL,
   name_kz TEXT NOT NULL,
   description_ru TEXT NOT NULL DEFAULT '',
@@ -11,59 +11,67 @@ CREATE TABLE IF NOT EXISTS departments (
 
 CREATE TABLE IF NOT EXISTS users (
   id SERIAL PRIMARY KEY,
-  email TEXT NOT NULL UNIQUE,
+  iin VARCHAR(12) NOT NULL UNIQUE,
+  password_hash TEXT NOT NULL,
   full_name TEXT NOT NULL,
-  role TEXT NOT NULL CHECK (role IN ('employee','manager','hr_admin')),
-  department_id INT REFERENCES departments(id),
-  manager_id INT REFERENCES users(id),
+  role VARCHAR(20) NOT NULL CHECK (role IN ('employee', 'manager', 'hr')),
+  department_id INT REFERENCES departments(id) ON DELETE SET NULL,
   company TEXT NOT NULL DEFAULT 'JanaPost',
-  position TEXT NOT NULL,
-  hired_at DATE NOT NULL,
+  position TEXT NOT NULL DEFAULT '',
+  hired_at DATE NOT NULL DEFAULT CURRENT_DATE,
   vacation_days_left INT NOT NULL DEFAULT 24,
-  locale TEXT NOT NULL DEFAULT 'ru'
+  created_at TIMESTAMPTZ NOT NULL DEFAULT now()
 );
 
 CREATE TABLE IF NOT EXISTS requests (
   id SERIAL PRIMARY KEY,
-  type TEXT NOT NULL CHECK (type IN ('vacation','advance')),
-  user_id INT NOT NULL REFERENCES users(id),
+  type VARCHAR(20) NOT NULL CHECK (type IN ('vacation', 'advance')),
+  user_id INT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
   department_id INT NOT NULL REFERENCES departments(id),
   date_from DATE,
   date_to DATE,
-  days INT NOT NULL DEFAULT 0,
+  days_count INT NOT NULL DEFAULT 0,
+  is_paid BOOLEAN NOT NULL DEFAULT true,
   amount NUMERIC(12,2) NOT NULL DEFAULT 0,
+  desired_date DATE,
+  document_url TEXT NOT NULL DEFAULT '',
   comment TEXT NOT NULL DEFAULT '',
-  status TEXT NOT NULL,
-  created_at TIMESTAMPTZ NOT NULL DEFAULT now()
+  manager_comment TEXT NOT NULL DEFAULT '',
+  status VARCHAR(30) NOT NULL DEFAULT 'pending' CHECK (status IN ('pending', 'approved', 'revision_needed', 'rejected')),
+  approved_by INT REFERENCES users(id),
+  approved_at TIMESTAMPTZ,
+  created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+  updated_at TIMESTAMPTZ NOT NULL DEFAULT now()
 );
 
 CREATE TABLE IF NOT EXISTS request_history (
   id SERIAL PRIMARY KEY,
   request_id INT NOT NULL REFERENCES requests(id) ON DELETE CASCADE,
-  status TEXT NOT NULL,
+  status VARCHAR(30) NOT NULL,
   actor_id INT REFERENCES users(id),
-  note TEXT NOT NULL DEFAULT '',
-  at TIMESTAMPTZ NOT NULL DEFAULT now()
+  comment TEXT NOT NULL DEFAULT '',
+  created_at TIMESTAMPTZ NOT NULL DEFAULT now()
 );
 
 CREATE TABLE IF NOT EXISTS tasks (
   id SERIAL PRIMARY KEY,
-  assignee_id INT NOT NULL REFERENCES users(id),
-  created_by INT NOT NULL REFERENCES users(id),
-  department_id INT NOT NULL REFERENCES departments(id),
   title TEXT NOT NULL,
+  description TEXT NOT NULL DEFAULT '',
+  department_id INT NOT NULL REFERENCES departments(id),
+  created_by INT NOT NULL REFERENCES users(id),
+  assigned_to INT NOT NULL REFERENCES users(id),
   due_date DATE,
-  status TEXT NOT NULL DEFAULT 'open' CHECK (status IN ('open','in_progress','done'))
+  status VARCHAR(20) NOT NULL DEFAULT 'todo' CHECK (status IN ('todo', 'in_progress', 'done')),
+  created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+  updated_at TIMESTAMPTZ NOT NULL DEFAULT now()
 );
 
 CREATE TABLE IF NOT EXISTS courses (
   id SERIAL PRIMARY KEY,
   title_ru TEXT NOT NULL,
   title_kz TEXT NOT NULL,
-  description_ru TEXT NOT NULL,
-  description_kz TEXT NOT NULL,
-  content_ru TEXT NOT NULL,
-  content_kz TEXT NOT NULL
+  description_ru TEXT NOT NULL DEFAULT '',
+  description_kz TEXT NOT NULL DEFAULT ''
 );
 
 CREATE TABLE IF NOT EXISTS quiz_questions (
@@ -79,21 +87,21 @@ CREATE TABLE IF NOT EXISTS quiz_questions (
 CREATE TABLE IF NOT EXISTS course_assignments (
   id SERIAL PRIMARY KEY,
   course_id INT NOT NULL REFERENCES courses(id) ON DELETE CASCADE,
-  user_id INT NOT NULL REFERENCES users(id),
+  user_id INT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+  status VARCHAR(20) NOT NULL DEFAULT 'not_started' CHECK (status IN ('not_started', 'in_progress', 'completed')),
   progress INT NOT NULL DEFAULT 0,
   score INT,
-  assigned_by INT REFERENCES users(id),
   assigned_at TIMESTAMPTZ NOT NULL DEFAULT now(),
   completed_at TIMESTAMPTZ,
-  UNIQUE (course_id, user_id)
+  UNIQUE(course_id, user_id)
 );
 
 CREATE TABLE IF NOT EXISTS notifications (
   id SERIAL PRIMARY KEY,
-  user_id INT NOT NULL REFERENCES users(id),
-  kind TEXT NOT NULL,
-  title_ru TEXT NOT NULL,
-  title_kz TEXT NOT NULL,
+  user_id INT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+  kind VARCHAR(50) NOT NULL DEFAULT 'info',
+  title TEXT NOT NULL,
+  message TEXT NOT NULL DEFAULT '',
   link TEXT NOT NULL DEFAULT '',
   read BOOLEAN NOT NULL DEFAULT false,
   created_at TIMESTAMPTZ NOT NULL DEFAULT now()
@@ -106,12 +114,13 @@ CREATE TABLE IF NOT EXISTS kb_documents (
   url TEXT NOT NULL,
   content TEXT NOT NULL,
   keywords TEXT NOT NULL DEFAULT '',
-  lang TEXT NOT NULL DEFAULT 'ru'
+  lang VARCHAR(10) NOT NULL DEFAULT 'ru'
 );
 
 CREATE TABLE IF NOT EXISTS ai_escalations (
   id SERIAL PRIMARY KEY,
   user_id INT NOT NULL REFERENCES users(id),
   question TEXT NOT NULL,
+  status VARCHAR(30) NOT NULL DEFAULT 'open',
   created_at TIMESTAMPTZ NOT NULL DEFAULT now()
 );

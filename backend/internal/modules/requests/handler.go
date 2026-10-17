@@ -1,13 +1,17 @@
 package requests
 
 import (
+	"bytes"
 	"encoding/json"
 	"fmt"
+	"io"
 	"net/http"
-	"strconv"
+	"path/filepath"
+	"strings"
 	"time"
 
 	"github.com/go-chi/chi/v5"
+	"github.com/kilcdevs/janamen/internal/config"
 	"github.com/kilcdevs/janamen/internal/db"
 	"github.com/kilcdevs/janamen/internal/http/httputil"
 	"github.com/kilcdevs/janamen/internal/integrations/documentolog"
@@ -17,210 +21,257 @@ import (
 
 type Handler struct {
 	q   *db.Queries
+	cfg config.Config
 	zup zup1c.Client
 	doc documentolog.Client
 }
 
-func NewHandler(q *db.Queries, zup zup1c.Client, doc documentolog.Client) *Handler {
-	return &Handler{q: q, zup: zup, doc: doc}
+func NewHandler(q *db.Queries, cfg config.Config, zup zup1c.Client, doc documentolog.Client) *Handler {
+	return &Handler{q: q, cfg: cfg, zup: zup, doc: doc}
 }
 
-type CreateRequestInput struct {
-	Type     string  `json:"type"` // vacation | advance
-	DateFrom string  `json:"date_from"`
-	DateTo   string  `json:"date_to"`
-	Days     int     `json:"days"`
-	Amount   float64 `json:"amount"`
-	Comment  string  `json:"comment"`
+type CreateRequestPayload struct {
+	Type        string   `json:"type"` // 'vacation' or 'advance'
+	DateFrom    *string  `json:"date_from"`
+	DateTo      *string  `json:"date_to"`
+	DaysCount   int      `json:"days_count"`
+	IsPaid      *bool    `json:"is_paid"`
+	Amount      float64  `json:"amount"`
+	DesiredDate *string  `json:"desired_date"`
+	DocumentURL string   `json:"document_url"`
+	Comment     string   `json:"comment"`
 }
 
-func (h *Handler) ListRequests(w http.ResponseWriter, r *http.Request) {
+func (h *Handler) Create(w http.ResponseWriter, r *http.Request) {
 	c := middleware.GetClaims(r.Context())
 	if c == nil {
-		httputil.Error(w, http.StatusUnauthorized, "unauthorized")
+		httputil.Error(w, http.StatusUnauthorized, "Неавторизован")
 		return
 	}
 
-	deptParam := r.URL.Query().Get("department_id")
-	if deptParam != "" {
-		targetDept, err := strconv.Atoi(deptParam)
-		if err == nil {
-			if c.Role == "manager" && targetDept != c.DepartmentID {
-				httputil.Error(w, http.StatusForbidden, "forbidden: access to other department data is restricted")
-				return
-			}
-			if c.Role == "employee" {
-				httputil.Error(w, http.StatusForbidden, "forbidden: employee cannot view department registry")
-				return
-			}
-			reqs, err := h.q.ListRequestsByDepartment(r.Context(), targetDept)
-			if err != nil {
-				httputil.Error(w, http.StatusInternalServerError, err.Error())
-				return
-			}
-			httputil.JSON(w, http.StatusOK, reqs)
-			return
-		}
-	}
-
-	switch c.Role {
-	case "hr_admin":
-		reqs, err := h.q.ListAllRequests(r.Context())
-		if err != nil {
-			httputil.Error(w, http.StatusInternalServerError, err.Error())
-			return
-		}
-		httputil.JSON(w, http.StatusOK, reqs)
-	case "manager":
-		reqs, err := h.q.ListRequestsByDepartment(r.Context(), c.DepartmentID)
-		if err != nil {
-			httputil.Error(w, http.StatusInternalServerError, err.Error())
-			return
-		}
-		httputil.JSON(w, http.StatusOK, reqs)
-	default:
-		reqs, err := h.q.ListRequestsByUser(r.Context(), c.UserID)
-		if err != nil {
-			httputil.Error(w, http.StatusInternalServerError, err.Error())
-			return
-		}
-		httputil.JSON(w, http.StatusOK, reqs)
-	}
-}
-
-func (h *Handler) CreateRequest(w http.ResponseWriter, r *http.Request) {
-	c := middleware.GetClaims(r.Context())
-	if c == nil {
-		httputil.Error(w, http.StatusUnauthorized, "unauthorized")
+	var req CreateRequestPayload
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		httputil.Error(w, http.StatusBadRequest, "Неверный формат запроса")
 		return
 	}
 
-	var input CreateRequestInput
-	if err := json.NewDecoder(r.Body).Decode(&input); err != nil {
-		httputil.Error(w, http.StatusBadRequest, "invalid request body")
+	req.Type = strings.TrimSpace(strings.ToLower(req.Type))
+	if req.Type != "vacation" && req.Type != "advance" {
+		httputil.Error(w, http.StatusBadRequest, "Тип заявки должен быть 'vacation' или 'advance'")
 		return
 	}
 
-	if input.Type != "vacation" && input.Type != "advance" {
-		httputil.Error(w, http.StatusBadRequest, "type must be 'vacation' or 'advance'")
-		return
-	}
-
-	user, err := h.q.GetUser(r.Context(), int32(c.UserID))
+	user, err := h.q.GetUser(r.Context(), c.UserID)
 	if err != nil {
-		httputil.Error(w, http.StatusInternalServerError, "user not found")
+		httputil.Error(w, http.StatusNotFound, "Пользователь не найден")
 		return
 	}
 
-	var dateFrom, dateTo *time.Time
-	if input.Type == "vacation" {
-		if input.DateFrom == "" || input.DateTo == "" || input.Days <= 0 {
-			httputil.Error(w, http.StatusBadRequest, "vacation requires valid date_from, date_to and days > 0")
-			return
-		}
-		t1, err1 := time.Parse("2006-01-02", input.DateFrom)
-		t2, err2 := time.Parse("2006-01-02", input.DateTo)
-		if err1 != nil || err2 != nil || t2.Before(t1) {
-			httputil.Error(w, http.StatusBadRequest, "invalid vacation date range")
-			return
-		}
-		dateFrom = &t1
-		dateTo = &t2
-
-		if user.VacationDaysLeft < input.Days {
-			httputil.Error(w, http.StatusBadRequest, fmt.Sprintf("недостаточно дней отпуска: доступно %d, запрошено %d", user.VacationDaysLeft, input.Days))
-			return
-		}
-	} else if input.Type == "advance" {
-		if input.Amount <= 0 {
-			httputil.Error(w, http.StatusBadRequest, "advance amount must be greater than 0")
-			return
-		}
-	}
-
-	deptID := 1
+	var deptID int
 	if user.DepartmentID != nil {
 		deptID = *user.DepartmentID
+	} else {
+		// Default to supply department if user is HR without department
+		deptID = 1
 	}
 
-	req, err := h.q.CreateRequest(r.Context(), db.CreateRequestParams{
-		Type:         input.Type,
-		UserID:       c.UserID,
+	var dateFrom *time.Time
+	var dateTo *time.Time
+	var desiredDate *time.Time
+	isPaid := true
+	if req.IsPaid != nil {
+		isPaid = *req.IsPaid
+	}
+
+	if req.Type == "vacation" {
+		if req.DateFrom != nil && *req.DateFrom != "" {
+			t, err := time.Parse("2006-01-02", *req.DateFrom)
+			if err != nil {
+				httputil.Error(w, http.StatusBadRequest, "Неверный формат даты начала (ожидается ГГГГ-ММ-ДД)")
+				return
+			}
+			dateFrom = &t
+		}
+		if req.DateTo != nil && *req.DateTo != "" {
+			t, err := time.Parse("2006-01-02", *req.DateTo)
+			if err != nil {
+				httputil.Error(w, http.StatusBadRequest, "Неверный формат даты окончания (ожидается ГГГГ-ММ-ДД)")
+				return
+			}
+			dateTo = &t
+		}
+
+		if isPaid && req.DaysCount > user.VacationDaysLeft {
+			httputil.Error(w, http.StatusBadRequest, fmt.Sprintf("Запрошено %d дней, но доступный остаток составляет %d дней", req.DaysCount, user.VacationDaysLeft))
+			return
+		}
+	} else if req.Type == "advance" {
+		if req.Amount <= 0 {
+			httputil.Error(w, http.StatusBadRequest, "Сумма аванса должна быть больше 0")
+			return
+		}
+		if req.DesiredDate != nil && *req.DesiredDate != "" {
+			t, err := time.Parse("2006-01-02", *req.DesiredDate)
+			if err != nil {
+				httputil.Error(w, http.StatusBadRequest, "Неверный формат даты выплаты (ожидается ГГГГ-ММ-ДД)")
+				return
+			}
+			desiredDate = &t
+		}
+	}
+
+	createdReq, err := h.q.CreateRequest(r.Context(), db.CreateRequestParams{
+		Type:         req.Type,
+		UserID:       user.ID,
 		DepartmentID: deptID,
 		DateFrom:     dateFrom,
 		DateTo:       dateTo,
-		Days:         input.Days,
-		Amount:       input.Amount,
-		Comment:      input.Comment,
-		Status:       "pending_manager",
+		DaysCount:    req.DaysCount,
+		IsPaid:       isPaid,
+		Amount:       req.Amount,
+		DesiredDate:  desiredDate,
+		DocumentUrl:  req.DocumentURL,
+		Comment:      req.Comment,
+		Status:       "pending",
 	})
 	if err != nil {
-		httputil.Error(w, http.StatusInternalServerError, "failed to create request: "+err.Error())
+		httputil.Error(w, http.StatusInternalServerError, "Ошибка создания заявки: "+err.Error())
 		return
 	}
 
-	reqID := int(req.ID)
-	actorID := c.UserID
-
-	// Add timeline history
-	_ = h.q.AddHistory(r.Context(), db.AddHistoryParams{
-		RequestID: reqID,
-		Status:    "created",
-		ActorID:   &actorID,
-		Note:      "Заявка создана сотрудником",
-	})
-	_ = h.q.AddHistory(r.Context(), db.AddHistoryParams{
-		RequestID: reqID,
-		Status:    "pending_manager",
-		ActorID:   nil,
-		Note:      "Передано на согласование руководителю",
+	// Add creation history
+	_ = h.q.AddRequestHistory(r.Context(), db.AddRequestHistoryParams{
+		RequestID: createdReq.ID,
+		Status:    "pending",
+		ActorID:   &user.ID,
+		Comment:   "Заявка создана сотрудником и передана на рассмотрение",
 	})
 
-	// Notify department manager if exists
-	if user.ManagerID != nil {
-		_ = h.q.CreateNotification(r.Context(), db.CreateNotificationParams{
-			UserID:  *user.ManagerID,
-			Kind:    "request",
-			TitleRu: fmt.Sprintf("Новая заявка на согласование от %s", user.FullName),
-			TitleKz: fmt.Sprintf("%s қызметкерінен келісуге жаңа өтінім", user.FullName),
-			Link:    fmt.Sprintf("/requests/%d", req.ID),
-		})
+	// Notification to manager or HR
+	if user.Role == "employee" {
+		// Notify department managers
+		deptUsers, _ := h.q.ListUsersByDepartment(r.Context(), &deptID)
+		for _, u := range deptUsers {
+			if u.Role == "manager" {
+				_ = h.q.CreateNotification(r.Context(), db.CreateNotificationParams{
+					UserID:  u.ID,
+					Kind:    "request",
+					Title:   "Новая заявка на согласование",
+					Message: fmt.Sprintf("Сотрудник %s подал заявку на %s", user.FullName, req.Type),
+					Link:    fmt.Sprintf("/requests/%d", createdReq.ID),
+				})
+			}
+		}
+	} else if user.Role == "manager" {
+		// Notify HR director
+		allUsers, _ := h.q.ListAllUsers(r.Context())
+		for _, u := range allUsers {
+			if u.Role == "hr" {
+				_ = h.q.CreateNotification(r.Context(), db.CreateNotificationParams{
+					UserID:  u.ID,
+					Kind:    "request",
+					Title:   "Заявка от руководителя подразделения",
+					Message: fmt.Sprintf("Руководитель %s подал заявку на %s", user.FullName, req.Type),
+					Link:    fmt.Sprintf("/requests/%d", createdReq.ID),
+				})
+			}
+		}
 	}
 
-	httputil.JSON(w, http.StatusCreated, req)
+	httputil.JSON(w, http.StatusCreated, createdReq)
 }
 
-func (h *Handler) GetRequest(w http.ResponseWriter, r *http.Request) {
+func (h *Handler) ListMy(w http.ResponseWriter, r *http.Request) {
 	c := middleware.GetClaims(r.Context())
 	if c == nil {
-		httputil.Error(w, http.StatusUnauthorized, "unauthorized")
+		httputil.Error(w, http.StatusUnauthorized, "Неавторизован")
+		return
+	}
+
+	list, err := h.q.ListRequestsByUser(r.Context(), c.UserID)
+	if err != nil {
+		httputil.Error(w, http.StatusInternalServerError, "Ошибка загрузки ваших заявок: "+err.Error())
+		return
+	}
+	httputil.JSON(w, http.StatusOK, list)
+}
+
+func (h *Handler) ListDepartment(w http.ResponseWriter, r *http.Request) {
+	c := middleware.GetClaims(r.Context())
+	if c == nil {
+		httputil.Error(w, http.StatusUnauthorized, "Неавторизован")
+		return
+	}
+
+	if c.Role == "employee" {
+		httputil.Error(w, http.StatusForbidden, "Доступ запрещен: сотрудники не могут просматривать заявки отдела")
+		return
+	}
+
+	var deptID int
+	if c.DepartmentID != nil {
+		deptID = *c.DepartmentID
+	} else {
+		httputil.Error(w, http.StatusBadRequest, "У вас не назначен отдел")
+		return
+	}
+
+	list, err := h.q.ListRequestsByDepartment(r.Context(), deptID)
+	if err != nil {
+		httputil.Error(w, http.StatusInternalServerError, "Ошибка загрузки заявок отдела: "+err.Error())
+		return
+	}
+	httputil.JSON(w, http.StatusOK, list)
+}
+
+func (h *Handler) ListAll(w http.ResponseWriter, r *http.Request) {
+	c := middleware.GetClaims(r.Context())
+	if c == nil || c.Role != "hr" {
+		httputil.Error(w, http.StatusForbidden, "Доступ запрещен: только HR имеет доступ ко всем заявкам компании")
+		return
+	}
+
+	list, err := h.q.ListAllRequests(r.Context())
+	if err != nil {
+		httputil.Error(w, http.StatusInternalServerError, "Ошибка загрузки списка всех заявок: "+err.Error())
+		return
+	}
+	httputil.JSON(w, http.StatusOK, list)
+}
+
+func (h *Handler) Get(w http.ResponseWriter, r *http.Request) {
+	c := middleware.GetClaims(r.Context())
+	if c == nil {
+		httputil.Error(w, http.StatusUnauthorized, "Неавторизован")
 		return
 	}
 
 	idStr := chi.URLParam(r, "id")
-	id, err := strconv.Atoi(idStr)
-	if err != nil {
-		httputil.Error(w, http.StatusBadRequest, "invalid request id")
+	var id int
+	if _, err := fmt.Sscanf(idStr, "%d", &id); err != nil {
+		httputil.Error(w, http.StatusBadRequest, "Неверный идентификатор заявки")
 		return
 	}
 
-	req, err := h.q.GetRequest(r.Context(), int32(id))
+	req, err := h.q.GetRequest(r.Context(), id)
 	if err != nil {
-		httputil.Error(w, http.StatusNotFound, "request not found")
+		httputil.Error(w, http.StatusNotFound, "Заявка не найдена")
 		return
 	}
 
-	// Strict RBAC check
+	// RBAC check
 	if c.Role == "employee" && req.UserID != c.UserID {
-		httputil.Error(w, http.StatusForbidden, "forbidden: cannot view request of another user")
+		httputil.Error(w, http.StatusForbidden, "Доступ запрещен: вы можете просматривать только собственные заявки")
 		return
 	}
-	if c.Role == "manager" && req.DepartmentID != c.DepartmentID && req.UserID != c.UserID {
-		httputil.Error(w, http.StatusForbidden, "forbidden: cannot view request from another department")
-		return
+	if c.Role == "manager" && req.UserID != c.UserID {
+		if c.DepartmentID == nil || req.DepartmentID != *c.DepartmentID {
+			httputil.Error(w, http.StatusForbidden, "Доступ запрещен: руководитель не имеет доступа к данным других отделов")
+			return
+		}
 	}
 
-	history, _ := h.q.ListHistory(r.Context(), int(req.ID))
+	history, _ := h.q.ListRequestHistory(r.Context(), req.ID)
 
 	httputil.JSON(w, http.StatusOK, map[string]interface{}{
 		"request": req,
@@ -228,175 +279,195 @@ func (h *Handler) GetRequest(w http.ResponseWriter, r *http.Request) {
 	})
 }
 
-type DecisionInput struct {
-	Comment string `json:"comment"`
+type DecisionPayload struct {
+	Decision       string `json:"decision"` // 'approved', 'revision_needed', 'rejected'
+	ManagerComment string `json:"manager_comment"`
 }
 
-func (h *Handler) ApproveRequest(w http.ResponseWriter, r *http.Request) {
+func (h *Handler) MakeDecision(w http.ResponseWriter, r *http.Request) {
 	c := middleware.GetClaims(r.Context())
 	if c == nil {
-		httputil.Error(w, http.StatusUnauthorized, "unauthorized")
+		httputil.Error(w, http.StatusUnauthorized, "Неавторизован")
 		return
 	}
 
 	idStr := chi.URLParam(r, "id")
-	id, err := strconv.Atoi(idStr)
+	var id int
+	if _, err := fmt.Sscanf(idStr, "%d", &id); err != nil {
+		httputil.Error(w, http.StatusBadRequest, "Неверный идентификатор заявки")
+		return
+	}
+
+	var payload DecisionPayload
+	if err := json.NewDecoder(r.Body).Decode(&payload); err != nil {
+		httputil.Error(w, http.StatusBadRequest, "Неверный формат запроса")
+		return
+	}
+
+	decision := strings.TrimSpace(strings.ToLower(payload.Decision))
+	if decision != "approved" && decision != "revision_needed" && decision != "rejected" {
+		httputil.Error(w, http.StatusBadRequest, "Решение должно быть 'approved', 'revision_needed' или 'rejected'")
+		return
+	}
+
+	req, err := h.q.GetRequest(r.Context(), id)
 	if err != nil {
-		httputil.Error(w, http.StatusBadRequest, "invalid request id")
+		httputil.Error(w, http.StatusNotFound, "Заявка не найдена")
 		return
 	}
 
-	req, err := h.q.GetRequest(r.Context(), int32(id))
-	if err != nil {
-		httputil.Error(w, http.StatusNotFound, "request not found")
+	// RBAC permission check:
+	// If requester is a manager, only HR can approve/reject!
+	if req.UserRole == "manager" && c.Role != "hr" {
+		httputil.Error(w, http.StatusForbidden, "Заявки руководителей согласуются исключительно HR-службой")
 		return
 	}
-
-	if c.Role == "manager" && req.DepartmentID != c.DepartmentID {
-		httputil.Error(w, http.StatusForbidden, "forbidden: cannot approve requests of other departments")
-		return
-	}
-	if c.Role == "employee" {
-		httputil.Error(w, http.StatusForbidden, "forbidden: employees cannot approve requests")
-		return
-	}
-
-	var input DecisionInput
-	_ = json.NewDecoder(r.Body).Decode(&input)
-	note := "Одобрено руководителем"
-	if input.Comment != "" {
-		note = input.Comment
-	}
-
-	reqID := int(req.ID)
-	actorID := c.UserID
-
-	// Step 1: Manager approves
-	_ = h.q.AddHistory(r.Context(), db.AddHistoryParams{
-		RequestID: reqID,
-		Status:    "approved",
-		ActorID:   &actorID,
-		Note:      note,
-	})
-
-	// Step 2: External Documentolog mock integration
-	docID, _ := h.doc.SubmitForApproval(int(req.ID), req.Type)
-	_ = h.q.AddHistory(r.Context(), db.AddHistoryParams{
-		RequestID: reqID,
-		Status:    "sent_documentolog",
-		ActorID:   nil,
-		Note:      fmt.Sprintf("Документ отправлен в СЭД Documentolog (ID: %s)", docID),
-	})
-
-	// Step 3: External 1C:ZUP mock integration
-	emp, _ := h.q.GetUser(r.Context(), int32(req.UserID))
-	if req.Type == "vacation" {
-		zupDoc, _ := h.zup.PostVacation(emp.Email, int(req.Days))
-		newBalance := emp.VacationDaysLeft - req.Days
-		if newBalance < 0 {
-			newBalance = 0
+	// If requester is employee, only their department manager or HR can approve/reject
+	if req.UserRole == "employee" {
+		if c.Role != "hr" {
+			if c.Role != "manager" || c.DepartmentID == nil || req.DepartmentID != *c.DepartmentID {
+				httputil.Error(w, http.StatusForbidden, "Руководитель может согласовывать только заявки своего подразделения")
+				return
+			}
 		}
-		_ = h.q.UpdateVacationDays(r.Context(), db.UpdateVacationDaysParams{
-			ID:               emp.ID,
-			VacationDaysLeft: newBalance,
-		})
-		_ = h.q.AddHistory(r.Context(), db.AddHistoryParams{
-			RequestID: reqID,
-			Status:    "completed",
-			ActorID:   nil,
-			Note:      fmt.Sprintf("Приказ проведён в 1С:ЗУП (№ %s), списано дней: %d, остаток: %d", zupDoc, req.Days, newBalance),
-		})
-	} else {
-		zupDoc, _ := h.zup.PostAdvance(emp.Email, req.Amount)
-		_ = h.q.AddHistory(r.Context(), db.AddHistoryParams{
-			RequestID: reqID,
-			Status:    "completed",
-			ActorID:   nil,
-			Note:      fmt.Sprintf("Ведомость аванса зарегистрирована в 1С:ЗУП (№ %s)", zupDoc),
-		})
 	}
 
-	_ = h.q.UpdateRequestStatus(r.Context(), db.UpdateRequestStatusParams{
-		ID:     req.ID,
-		Status: "completed",
+	// Update decision
+	updatedReq, err := h.q.UpdateRequestDecision(r.Context(), db.UpdateRequestDecisionParams{
+		ID:             req.ID,
+		Status:         decision,
+		ManagerComment: payload.ManagerComment,
+		ApprovedBy:     &c.UserID,
+	})
+	if err != nil {
+		httputil.Error(w, http.StatusInternalServerError, "Ошибка сохранения решения: "+err.Error())
+		return
+	}
+
+	// If approved and vacation is paid, deduct days
+	if decision == "approved" && req.Type == "vacation" && req.IsPaid {
+		user, uErr := h.q.GetUser(r.Context(), req.UserID)
+		if uErr == nil {
+			newDays := user.VacationDaysLeft - req.DaysCount
+			if newDays < 0 {
+				newDays = 0
+			}
+			_ = h.q.UpdateVacationDays(r.Context(), db.UpdateVacationDaysParams{
+				ID:               user.ID,
+				VacationDaysLeft: newDays,
+			})
+		}
+		// Register in Documentolog and 1C:ZUP
+		_, _ = h.doc.SubmitForApproval(req.ID, req.Type)
+		_, _ = h.zup.PostVacation(req.UserIin, req.DaysCount)
+	} else if decision == "approved" && req.Type == "advance" {
+		_, _ = h.doc.SubmitForApproval(req.ID, req.Type)
+		_, _ = h.zup.PostAdvance(req.UserIin, req.Amount)
+	}
+
+	// Add timeline history
+	actionText := "Заявка одобрена"
+	if decision == "revision_needed" {
+		actionText = "Заявка возвращена на доработку"
+	} else if decision == "rejected" {
+		actionText = "Заявка отклонена"
+	}
+	if payload.ManagerComment != "" {
+		actionText += fmt.Sprintf(": %s", payload.ManagerComment)
+	}
+
+	_ = h.q.AddRequestHistory(r.Context(), db.AddRequestHistoryParams{
+		RequestID: req.ID,
+		Status:    decision,
+		ActorID:   &c.UserID,
+		Comment:   actionText,
 	})
 
-	// Notify employee
+	// Notify requester
+	var notifTitle string
+	switch decision {
+	case "approved":
+		notifTitle = "Ваша заявка одобрена! ✅"
+	case "revision_needed":
+		notifTitle = "Ваша заявка возвращена на доработку ⚠️"
+	case "rejected":
+		notifTitle = "Ваша заявка отклонена ❌"
+	}
+
 	_ = h.q.CreateNotification(r.Context(), db.CreateNotificationParams{
 		UserID:  req.UserID,
 		Kind:    "request",
-		TitleRu: fmt.Sprintf("Заявка #%d одобрена и проведена в 1С:ЗУП", req.ID),
-		TitleKz: fmt.Sprintf("#%d өтінім мақұлданды және 1С:ЗУП-та өткізілді", req.ID),
+		Title:   notifTitle,
+		Message: payload.ManagerComment,
 		Link:    fmt.Sprintf("/requests/%d", req.ID),
 	})
 
-	httputil.JSON(w, http.StatusOK, map[string]interface{}{
-		"status":     "completed",
-		"request_id": req.ID,
-		"message":    "Заявка успешно согласована и проведена в 1С:ЗУП",
-	})
+	httputil.JSON(w, http.StatusOK, updatedReq)
 }
 
-func (h *Handler) RejectRequest(w http.ResponseWriter, r *http.Request) {
+func (h *Handler) UploadDocument(w http.ResponseWriter, r *http.Request) {
 	c := middleware.GetClaims(r.Context())
 	if c == nil {
-		httputil.Error(w, http.StatusUnauthorized, "unauthorized")
+		httputil.Error(w, http.StatusUnauthorized, "Неавторизован")
 		return
 	}
 
-	idStr := chi.URLParam(r, "id")
-	id, err := strconv.Atoi(idStr)
+	// 10 MB max
+	if err := r.ParseMultipartForm(10 << 20); err != nil {
+		httputil.Error(w, http.StatusBadRequest, "Слишком большой файл (максимум 10 МБ)")
+		return
+	}
+
+	file, header, err := r.FormFile("file")
 	if err != nil {
-		httputil.Error(w, http.StatusBadRequest, "invalid request id")
+		httputil.Error(w, http.StatusBadRequest, "Файл не передан (ожидается поле 'file')")
+		return
+	}
+	defer file.Close()
+
+	ext := strings.ToLower(filepath.Ext(header.Filename))
+	if ext != ".jpg" && ext != ".jpeg" && ext != ".png" && ext != ".pdf" && ext != ".webp" {
+		httputil.Error(w, http.StatusBadRequest, "Разрешены только форматы JPG, PNG, WEBP и PDF")
 		return
 	}
 
-	req, err := h.q.GetRequest(r.Context(), int32(id))
+	fileBytes, err := io.ReadAll(file)
 	if err != nil {
-		httputil.Error(w, http.StatusNotFound, "request not found")
+		httputil.Error(w, http.StatusInternalServerError, "Ошибка чтения файла")
 		return
 	}
 
-	if c.Role == "manager" && req.DepartmentID != c.DepartmentID {
-		httputil.Error(w, http.StatusForbidden, "forbidden: cannot reject requests of other departments")
+	fileName := fmt.Sprintf("req_%d_%d%s", c.UserID, time.Now().UnixNano(), ext)
+	uploadURL := fmt.Sprintf("%s/storage/v1/object/documents/%s", strings.TrimRight(h.cfg.SupabaseURL, "/"), fileName)
+
+	supabaseReq, err := http.NewRequestWithContext(r.Context(), "POST", uploadURL, bytes.NewReader(fileBytes))
+	if err != nil {
+		httputil.Error(w, http.StatusInternalServerError, "Ошибка создания запроса к хранилищу")
 		return
 	}
-	if c.Role == "employee" {
-		httputil.Error(w, http.StatusForbidden, "forbidden: employees cannot reject requests")
+
+	contentType := header.Header.Get("Content-Type")
+	if contentType == "" {
+		contentType = "application/octet-stream"
+	}
+	supabaseReq.Header.Set("Content-Type", contentType)
+	supabaseReq.Header.Set("Authorization", "Bearer "+h.cfg.SupabaseKey)
+	supabaseReq.Header.Set("apikey", h.cfg.SupabaseKey)
+
+	client := &http.Client{Timeout: 15 * time.Second}
+	resp, err := client.Do(supabaseReq)
+	if err != nil || (resp.StatusCode != http.StatusOK && resp.StatusCode != http.StatusCreated) {
+		statusCode := http.StatusInternalServerError
+		if resp != nil {
+			statusCode = resp.StatusCode
+		}
+		httputil.Error(w, statusCode, "Ошибка загрузки файла в Supabase Storage")
 		return
 	}
+	defer resp.Body.Close()
 
-	var input DecisionInput
-	_ = json.NewDecoder(r.Body).Decode(&input)
-	note := "Отклонено руководителем"
-	if input.Comment != "" {
-		note = input.Comment
-	}
-
-	reqID := int(req.ID)
-	actorID := c.UserID
-
-	_ = h.q.UpdateRequestStatus(r.Context(), db.UpdateRequestStatusParams{
-		ID:     req.ID,
-		Status: "rejected",
-	})
-	_ = h.q.AddHistory(r.Context(), db.AddHistoryParams{
-		RequestID: reqID,
-		Status:    "rejected",
-		ActorID:   &actorID,
-		Note:      note,
-	})
-
-	_ = h.q.CreateNotification(r.Context(), db.CreateNotificationParams{
-		UserID:  req.UserID,
-		Kind:    "request",
-		TitleRu: fmt.Sprintf("Заявка #%d отклонена: %s", req.ID, note),
-		TitleKz: fmt.Sprintf("#%d өтінім қабылданбады: %s", req.ID, note),
-		Link:    fmt.Sprintf("/requests/%d", req.ID),
-	})
-
-	httputil.JSON(w, http.StatusOK, map[string]interface{}{
-		"status":     "rejected",
-		"request_id": req.ID,
+	publicURL := fmt.Sprintf("%s/storage/v1/object/public/documents/%s", strings.TrimRight(h.cfg.SupabaseURL, "/"), fileName)
+	httputil.JSON(w, http.StatusOK, map[string]string{
+		"url": publicURL,
 	})
 }

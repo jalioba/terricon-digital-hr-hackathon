@@ -23,7 +23,7 @@ func NewHandler(q *db.Queries) *Handler {
 func (h *Handler) ListCourses(w http.ResponseWriter, r *http.Request) {
 	c := middleware.GetClaims(r.Context())
 	if c == nil {
-		httputil.Error(w, http.StatusUnauthorized, "unauthorized")
+		httputil.Error(w, http.StatusUnauthorized, "Неавторизован")
 		return
 	}
 
@@ -41,15 +41,15 @@ func (h *Handler) ListCourses(w http.ResponseWriter, r *http.Request) {
 
 	type CourseItem struct {
 		db.Course
-		Assigned bool   `json:"assigned"`
-		Progress int    `json:"progress"`
-		Score    *int   `json:"score"`
+		Assigned bool `json:"assigned"`
+		Progress int  `json:"progress"`
+		Score    *int `json:"score"`
 	}
 
 	var result []CourseItem
 	for _, cItem := range courses {
 		item := CourseItem{Course: cItem}
-		if a, ok := assignMap[int(cItem.ID)]; ok {
+		if a, ok := assignMap[cItem.ID]; ok {
 			item.Assigned = true
 			item.Progress = a.Progress
 			item.Score = a.Score
@@ -63,20 +63,20 @@ func (h *Handler) ListCourses(w http.ResponseWriter, r *http.Request) {
 func (h *Handler) GetCourse(w http.ResponseWriter, r *http.Request) {
 	c := middleware.GetClaims(r.Context())
 	if c == nil {
-		httputil.Error(w, http.StatusUnauthorized, "unauthorized")
+		httputil.Error(w, http.StatusUnauthorized, "Неавторизован")
 		return
 	}
 
 	idStr := chi.URLParam(r, "id")
 	id, err := strconv.Atoi(idStr)
 	if err != nil {
-		httputil.Error(w, http.StatusBadRequest, "invalid course id")
+		httputil.Error(w, http.StatusBadRequest, "Неверный идентификатор курса")
 		return
 	}
 
-	course, err := h.q.GetCourse(r.Context(), int32(id))
+	course, err := h.q.GetCourse(r.Context(), id)
 	if err != nil {
-		httputil.Error(w, http.StatusNotFound, "course not found")
+		httputil.Error(w, http.StatusNotFound, "Курс не найден")
 		return
 	}
 
@@ -87,7 +87,7 @@ func (h *Handler) GetCourse(w http.ResponseWriter, r *http.Request) {
 	})
 
 	type SafeQuestion struct {
-		ID         int32    `json:"id"`
+		ID         int      `json:"id"`
 		CourseID   int      `json:"course_id"`
 		QuestionRu string   `json:"question_ru"`
 		QuestionKz string   `json:"question_kz"`
@@ -120,33 +120,33 @@ type SubmitQuizInput struct {
 func (h *Handler) SubmitQuiz(w http.ResponseWriter, r *http.Request) {
 	c := middleware.GetClaims(r.Context())
 	if c == nil {
-		httputil.Error(w, http.StatusUnauthorized, "unauthorized")
+		httputil.Error(w, http.StatusUnauthorized, "Неавторизован")
 		return
 	}
 
 	idStr := chi.URLParam(r, "id")
 	courseID, err := strconv.Atoi(idStr)
 	if err != nil {
-		httputil.Error(w, http.StatusBadRequest, "invalid course id")
+		httputil.Error(w, http.StatusBadRequest, "Неверный идентификатор курса")
 		return
 	}
 
 	var input SubmitQuizInput
 	if err := json.NewDecoder(r.Body).Decode(&input); err != nil {
-		httputil.Error(w, http.StatusBadRequest, "invalid quiz submission")
+		httputil.Error(w, http.StatusBadRequest, "Неверный формат ответов квиза")
 		return
 	}
 
 	questions, err := h.q.ListQuestions(r.Context(), courseID)
 	if err != nil || len(questions) == 0 {
-		httputil.Error(w, http.StatusBadRequest, "no questions for this course")
+		httputil.Error(w, http.StatusBadRequest, "Вопросы для данного курса не найдены")
 		return
 	}
 
 	correctCount := 0
 	for _, q := range questions {
-		ans, ok := input.Answers[strconv.Itoa(int(q.ID))]
-		if ok && ans == int(q.CorrectIndex) {
+		ans, ok := input.Answers[strconv.Itoa(q.ID)]
+		if ok && ans == q.CorrectIndex {
 			correctCount++
 		}
 	}
@@ -162,14 +162,14 @@ func (h *Handler) SubmitQuiz(w http.ResponseWriter, r *http.Request) {
 			Score:    &scoreVal,
 		})
 
-		course, _ := h.q.GetCourse(r.Context(), int32(courseID))
+		course, _ := h.q.GetCourse(r.Context(), courseID)
 
 		// Trigger notification
 		_ = h.q.CreateNotification(r.Context(), db.CreateNotificationParams{
 			UserID:  c.UserID,
 			Kind:    "academy",
-			TitleRu: fmt.Sprintf("Поздравляем! Курс «%s» успешно пройден на %d%%", course.TitleRu, scorePercent),
-			TitleKz: fmt.Sprintf("Құттықтаймыз! «%s» курсы сәтті %d%% аяқталды", course.TitleKz, scorePercent),
+			Title:   fmt.Sprintf("Поздравляем! Курс «%s» успешно пройден на %d%%", course.TitleRu, scorePercent),
+			Message: "Результат зафиксирован в вашем профиле.",
 			Link:    fmt.Sprintf("/academy/%d", courseID),
 		})
 	}
@@ -192,30 +192,29 @@ type AssignInput struct {
 
 func (h *Handler) AssignCourse(w http.ResponseWriter, r *http.Request) {
 	c := middleware.GetClaims(r.Context())
-	if c == nil || c.Role != "hr_admin" {
-		httputil.Error(w, http.StatusForbidden, "forbidden: only HR Admin can assign courses")
+	if c == nil || (c.Role != "hr" && c.Role != "manager") {
+		httputil.Error(w, http.StatusForbidden, "Назначать курсы могут только HR и руководитель")
 		return
 	}
 
 	var input AssignInput
 	if err := json.NewDecoder(r.Body).Decode(&input); err != nil || input.CourseID <= 0 || input.UserID <= 0 {
-		httputil.Error(w, http.StatusBadRequest, "invalid course_id or user_id")
+		httputil.Error(w, http.StatusBadRequest, "Неверные параметры курса или сотрудника")
 		return
 	}
 
 	_ = h.q.AssignCourse(r.Context(), db.AssignCourseParams{
-		CourseID:   input.CourseID,
-		UserID:     input.UserID,
-		AssignedBy: &c.UserID,
+		CourseID: input.CourseID,
+		UserID:   input.UserID,
 	})
 
-	course, _ := h.q.GetCourse(r.Context(), int32(input.CourseID))
+	course, _ := h.q.GetCourse(r.Context(), input.CourseID)
 
 	_ = h.q.CreateNotification(r.Context(), db.CreateNotificationParams{
 		UserID:  input.UserID,
 		Kind:    "academy",
-		TitleRu: fmt.Sprintf("HR назначил вам курс «%s»", course.TitleRu),
-		TitleKz: fmt.Sprintf("HR сізге «%s» курсын тағайындады", course.TitleKz),
+		Title:   fmt.Sprintf("Вам назначен курс «%s»", course.TitleRu),
+		Message: "Пройдите учебные материалы и проверочный тест в Jana Academy.",
 		Link:    fmt.Sprintf("/academy/%d", input.CourseID),
 	})
 

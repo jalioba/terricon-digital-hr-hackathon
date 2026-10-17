@@ -9,35 +9,34 @@ import (
 )
 
 type AiEscalation struct {
-	ID        int32     `json:"id"`
+	ID        int       `json:"id"`
 	UserID    int       `json:"user_id"`
 	Question  string    `json:"question"`
+	Status    string    `json:"status"`
 	CreatedAt time.Time `json:"created_at"`
 }
 
 type Course struct {
-	ID            int32  `json:"id"`
+	ID            int    `json:"id"`
 	TitleRu       string `json:"title_ru"`
 	TitleKz       string `json:"title_kz"`
 	DescriptionRu string `json:"description_ru"`
 	DescriptionKz string `json:"description_kz"`
-	ContentRu     string `json:"content_ru"`
-	ContentKz     string `json:"content_kz"`
 }
 
 type CourseAssignment struct {
-	ID          int32      `json:"id"`
+	ID          int        `json:"id"`
 	CourseID    int        `json:"course_id"`
 	UserID      int        `json:"user_id"`
+	Status      string     `json:"status"`
 	Progress    int        `json:"progress"`
 	Score       *int       `json:"score"`
-	AssignedBy  *int       `json:"assigned_by"`
 	AssignedAt  time.Time  `json:"assigned_at"`
 	CompletedAt *time.Time `json:"completed_at"`
 }
 
 type Department struct {
-	ID            int32  `json:"id"`
+	ID            int    `json:"id"`
 	Code          string `json:"code"`
 	NameRu        string `json:"name_ru"`
 	NameKz        string `json:"name_kz"`
@@ -46,7 +45,7 @@ type Department struct {
 }
 
 type KbDocument struct {
-	ID       int32  `json:"id"`
+	ID       int    `json:"id"`
 	Title    string `json:"title"`
 	Section  string `json:"section"`
 	Url      string `json:"url"`
@@ -56,18 +55,18 @@ type KbDocument struct {
 }
 
 type Notification struct {
-	ID        int32     `json:"id"`
+	ID        int       `json:"id"`
 	UserID    int       `json:"user_id"`
 	Kind      string    `json:"kind"`
-	TitleRu   string    `json:"title_ru"`
-	TitleKz   string    `json:"title_kz"`
+	Title     string    `json:"title"`
+	Message   string    `json:"message"`
 	Link      string    `json:"link"`
 	Read      bool      `json:"read"`
 	CreatedAt time.Time `json:"created_at"`
 }
 
 type QuizQuestion struct {
-	ID           int32    `json:"id"`
+	ID           int      `json:"id"`
 	CourseID     int      `json:"course_id"`
 	QuestionRu   string   `json:"question_ru"`
 	QuestionKz   string   `json:"question_kz"`
@@ -77,48 +76,58 @@ type QuizQuestion struct {
 }
 
 type Request struct {
-	ID           int32      `json:"id"`
-	Type         string     `json:"type"`
-	UserID       int        `json:"user_id"`
-	DepartmentID int        `json:"department_id"`
-	DateFrom     *time.Time `json:"date_from"`
-	DateTo       *time.Time `json:"date_to"`
-	Days         int        `json:"days"`
-	Amount       float64    `json:"amount"`
-	Comment      string     `json:"comment"`
-	Status       string     `json:"status"`
-	CreatedAt    time.Time  `json:"created_at"`
+	ID             int        `json:"id"`
+	Type           string     `json:"type"`
+	UserID         int        `json:"user_id"`
+	DepartmentID   int        `json:"department_id"`
+	DateFrom       *time.Time `json:"date_from"`
+	DateTo         *time.Time `json:"date_to"`
+	DaysCount      int        `json:"days_count"`
+	IsPaid         bool       `json:"is_paid"`
+	Amount         float64    `json:"amount"`
+	DesiredDate    *time.Time `json:"desired_date"`
+	DocumentUrl    string     `json:"document_url"`
+	Comment        string     `json:"comment"`
+	ManagerComment string     `json:"manager_comment"`
+	Status         string     `json:"status"`
+	ApprovedBy     *int       `json:"approved_by"`
+	ApprovedAt     *time.Time `json:"approved_at"`
+	CreatedAt      time.Time  `json:"created_at"`
+	UpdatedAt      time.Time  `json:"updated_at"`
 }
 
 type RequestHistory struct {
-	ID        int32     `json:"id"`
+	ID        int       `json:"id"`
 	RequestID int       `json:"request_id"`
 	Status    string    `json:"status"`
 	ActorID   *int      `json:"actor_id"`
-	Note      string    `json:"note"`
-	At        time.Time `json:"at"`
+	Comment   string    `json:"comment"`
+	CreatedAt time.Time `json:"created_at"`
 }
 
 type Task struct {
-	ID           int32      `json:"id"`
-	AssigneeID   int        `json:"assignee_id"`
-	CreatedBy    int        `json:"created_by"`
-	DepartmentID int        `json:"department_id"`
+	ID           int        `json:"id"`
 	Title        string     `json:"title"`
+	Description  string     `json:"description"`
+	DepartmentID int        `json:"department_id"`
+	CreatedBy    int        `json:"created_by"`
+	AssignedTo   int        `json:"assigned_to"`
 	DueDate      *time.Time `json:"due_date"`
 	Status       string     `json:"status"`
+	CreatedAt    time.Time  `json:"created_at"`
+	UpdatedAt    time.Time  `json:"updated_at"`
 }
 
 type User struct {
-	ID               int32     `json:"id"`
-	Email            string    `json:"email"`
+	ID               int       `json:"id"`
+	Iin              string    `json:"iin"`
+	PasswordHash     string    `json:"password_hash"`
 	FullName         string    `json:"full_name"`
 	Role             string    `json:"role"`
 	DepartmentID     *int      `json:"department_id"`
-	ManagerID        *int      `json:"manager_id"`
 	Company          string    `json:"company"`
 	Position         string    `json:"position"`
 	HiredAt          time.Time `json:"hired_at"`
 	VacationDaysLeft int       `json:"vacation_days_left"`
-	Locale           string    `json:"locale"`
+	CreatedAt        time.Time `json:"created_at"`
 }

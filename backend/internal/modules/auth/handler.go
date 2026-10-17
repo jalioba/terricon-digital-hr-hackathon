@@ -3,11 +3,13 @@ package auth
 import (
 	"encoding/json"
 	"net/http"
+	"strings"
 
 	"github.com/kilcdevs/janamen/internal/config"
 	"github.com/kilcdevs/janamen/internal/db"
 	"github.com/kilcdevs/janamen/internal/http/httputil"
 	"github.com/kilcdevs/janamen/internal/middleware"
+	"golang.org/x/crypto/bcrypt"
 )
 
 type Handler struct {
@@ -19,72 +21,73 @@ func NewHandler(q *db.Queries, cfg config.Config) *Handler {
 	return &Handler{q: q, cfg: cfg}
 }
 
-type DemoLoginRequest struct {
-	UserID int    `json:"user_id"`
-	Email  string `json:"email"`
+type LoginRequest struct {
+	IIN      string `json:"iin"`
+	Password string `json:"password"`
 }
 
-type AuthResponse struct {
-	Token   string                `json:"token"`
-	User    db.User               `json:"user"`
+type LoginResponse struct {
+	Token   string              `json:"token"`
 	Profile db.GetUserProfileRow `json:"profile"`
 }
 
-func (h *Handler) ListDemoUsers(w http.ResponseWriter, r *http.Request) {
-	users, err := h.q.ListDemoUsers(r.Context())
-	if err != nil {
-		httputil.Error(w, http.StatusInternalServerError, "failed to list demo users: "+err.Error())
-		return
-	}
-	httputil.JSON(w, http.StatusOK, users)
-}
-
-func (h *Handler) DemoLogin(w http.ResponseWriter, r *http.Request) {
-	var req DemoLoginRequest
+func (h *Handler) Login(w http.ResponseWriter, r *http.Request) {
+	var req LoginRequest
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
-		httputil.Error(w, http.StatusBadRequest, "invalid request payload")
+		httputil.Error(w, http.StatusBadRequest, "Неверный формат запроса")
 		return
 	}
 
-	var user db.User
-	var err error
-	if req.UserID > 0 {
-		user, err = h.q.GetUser(r.Context(), int32(req.UserID))
-	} else if req.Email != "" {
-		user, err = h.q.GetUserByEmail(r.Context(), req.Email)
-	} else {
-		httputil.Error(w, http.StatusBadRequest, "must provide user_id or email")
+	req.IIN = strings.TrimSpace(req.IIN)
+	req.Password = strings.TrimSpace(req.Password)
+
+	if req.IIN == "" || req.Password == "" {
+		httputil.Error(w, http.StatusBadRequest, "Необходимо указать ИИН и пароль")
 		return
 	}
+
+	user, err := h.q.GetUserByIIN(r.Context(), req.IIN)
 	if err != nil {
-		httputil.Error(w, http.StatusNotFound, "user not found")
+		httputil.Error(w, http.StatusUnauthorized, "Пользователь с таким ИИН не найден или неверный пароль")
 		return
 	}
 
-	var deptID int
-	if user.DepartmentID != nil {
-		deptID = *user.DepartmentID
+	if err := bcrypt.CompareHashAndPassword([]byte(user.PasswordHash), []byte(req.Password)); err != nil {
+		httputil.Error(w, http.StatusUnauthorized, "Неверный пароль")
+		return
 	}
 
 	claims := middleware.Claims{
-		UserID:       int(user.ID),
-		Email:        user.Email,
+		UserID:       user.ID,
+		IIN:          user.Iin,
 		FullName:     user.FullName,
 		Role:         user.Role,
-		DepartmentID: deptID,
+		DepartmentID: user.DepartmentID,
 	}
 
 	token, err := middleware.GenerateToken(h.cfg.JWTSecret, claims)
 	if err != nil {
-		httputil.Error(w, http.StatusInternalServerError, "failed to generate token: "+err.Error())
+		httputil.Error(w, http.StatusInternalServerError, "Ошибка создания токена: "+err.Error())
 		return
 	}
 
-	profile, _ := h.q.GetUserProfile(r.Context(), user.ID)
+	profile, err := h.q.GetUserProfile(r.Context(), user.ID)
+	if err != nil {
+		httputil.Error(w, http.StatusInternalServerError, "Ошибка получения профиля: "+err.Error())
+		return
+	}
 
-	httputil.JSON(w, http.StatusOK, map[string]interface{}{
-		"token":   token,
-		"user":    user,
-		"profile": profile,
+	httputil.JSON(w, http.StatusOK, LoginResponse{
+		Token:   token,
+		Profile: profile,
 	})
+}
+
+func (h *Handler) ListDepartments(w http.ResponseWriter, r *http.Request) {
+	departments, err := h.q.ListDepartments(r.Context())
+	if err != nil {
+		httputil.Error(w, http.StatusInternalServerError, "Ошибка загрузки отделов: "+err.Error())
+		return
+	}
+	httputil.JSON(w, http.StatusOK, departments)
 }

@@ -13,11 +13,15 @@ type Config struct {
 	JWTSecret     string
 	AllowedOrigin []string
 	AutoSeed      bool
+	SupabaseURL   string
+	SupabaseKey   string
 }
 
 func Load() Config {
-	// Load .env from backend/ or repo root (ignored if missing).
-	_ = godotenv.Load(".env", "../.env")
+	// Load .env candidate paths
+	for _, p := range []string{".env", "../.env", "../../.env"} {
+		_ = godotenv.Load(p)
+	}
 	origins := strings.Split(get("CORS_ORIGINS", "http://localhost:4200,https://kilcdevs.net"), ",")
 	return Config{
 		Port:          get("PORT", "8080"),
@@ -25,6 +29,8 @@ func Load() Config {
 		JWTSecret:     get("JWT_SECRET", "dev-only-secret-change-me"),
 		AllowedOrigin: origins,
 		AutoSeed:      get("AUTO_SEED", "true") == "true",
+		SupabaseURL:   get("SUPABASE_URL", "https://pxirgvbyqqlkfdieozdx.supabase.co"),
+		SupabaseKey:   get("SUPABASE_SECRET_KEY", ""),
 	}
 }
 

@@ -21,7 +21,7 @@ func NewHandler(q *db.Queries) *Handler {
 func (h *Handler) ListNotifications(w http.ResponseWriter, r *http.Request) {
 	c := middleware.GetClaims(r.Context())
 	if c == nil {
-		httputil.Error(w, http.StatusUnauthorized, "unauthorized")
+		httputil.Error(w, http.StatusUnauthorized, "Неавторизован")
 		return
 	}
 
@@ -47,19 +47,19 @@ func (h *Handler) ListNotifications(w http.ResponseWriter, r *http.Request) {
 func (h *Handler) MarkRead(w http.ResponseWriter, r *http.Request) {
 	c := middleware.GetClaims(r.Context())
 	if c == nil {
-		httputil.Error(w, http.StatusUnauthorized, "unauthorized")
+		httputil.Error(w, http.StatusUnauthorized, "Неавторизован")
 		return
 	}
 
 	idStr := chi.URLParam(r, "id")
 	id, err := strconv.Atoi(idStr)
 	if err != nil {
-		httputil.Error(w, http.StatusBadRequest, "invalid notification id")
+		httputil.Error(w, http.StatusBadRequest, "Неверный идентификатор уведомления")
 		return
 	}
 
 	if err := h.q.MarkNotificationRead(r.Context(), db.MarkNotificationReadParams{
-		ID:     int32(id),
+		ID:     id,
 		UserID: c.UserID,
 	}); err != nil {
 		httputil.Error(w, http.StatusInternalServerError, err.Error())
@@ -72,11 +72,11 @@ func (h *Handler) MarkRead(w http.ResponseWriter, r *http.Request) {
 func (h *Handler) MarkAllRead(w http.ResponseWriter, r *http.Request) {
 	c := middleware.GetClaims(r.Context())
 	if c == nil {
-		httputil.Error(w, http.StatusUnauthorized, "unauthorized")
+		httputil.Error(w, http.StatusUnauthorized, "Неавторизован")
 		return
 	}
 
-	if err := h.q.MarkAllRead(r.Context(), c.UserID); err != nil {
+	if err := h.q.MarkAllNotificationsRead(r.Context(), c.UserID); err != nil {
 		httputil.Error(w, http.StatusInternalServerError, err.Error())
 		return
 	}

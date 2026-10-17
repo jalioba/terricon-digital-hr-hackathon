@@ -8,12 +8,13 @@ import (
 
 func TestGenerateAndParseToken(t *testing.T) {
 	secret := "test-secret-123456"
+	deptID := 1
 	claims := Claims{
 		UserID:       5,
-		Email:        "employee.supply@janamen.kz",
+		IIN:          "010203500123",
 		FullName:     "Алия Бекова",
 		Role:         "employee",
-		DepartmentID: 1,
+		DepartmentID: &deptID,
 	}
 
 	tokenStr, err := GenerateToken(secret, claims)
@@ -27,7 +28,7 @@ func TestGenerateAndParseToken(t *testing.T) {
 		if c == nil {
 			t.Fatal("claims expected in context, got nil")
 		}
-		if c.UserID != 5 || c.Role != "employee" {
+		if c.UserID != 5 || c.Role != "employee" || c.IIN != "010203500123" {
 			t.Fatalf("unexpected claims: %+v", c)
 		}
 		w.WriteHeader(http.StatusOK)
@@ -48,8 +49,8 @@ func TestRequireRole(t *testing.T) {
 	employeeClaims := Claims{UserID: 5, Role: "employee"}
 	tokenStr, _ := GenerateToken(secret, employeeClaims)
 
-	// Protected handler requiring manager or hr_admin
-	protected := AuthMiddleware(secret)(RequireRole("manager", "hr_admin")(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+	// Protected handler requiring manager or hr
+	protected := AuthMiddleware(secret)(RequireRole("manager", "hr")(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(http.StatusOK)
 	})))
 

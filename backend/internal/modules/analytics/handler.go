@@ -18,18 +18,18 @@ func NewHandler(q *db.Queries) *Handler {
 
 func (h *Handler) GetAnalytics(w http.ResponseWriter, r *http.Request) {
 	c := middleware.GetClaims(r.Context())
-	if c == nil || c.Role != "hr_admin" {
-		httputil.Error(w, http.StatusForbidden, "forbidden: only HR Admin can view executive analytics")
+	if c == nil || c.Role != "hr" {
+		httputil.Error(w, http.StatusForbidden, "Доступ запрещен: только HR имеет доступ к аналитике")
 		return
 	}
 
-	reqStats, _ := h.q.AnalyticsRequests(r.Context())
-	deptStats, _ := h.q.AnalyticsDepartments(r.Context())
-	learnStats, _ := h.q.AnalyticsLearning(r.Context())
+	reqStats, _ := h.q.AnalyticsRequestsByStatus(r.Context())
+	deptStats, _ := h.q.AnalyticsDepartmentStats(r.Context())
+	auditList, _ := h.q.AnalyticsApprovalsAudit(r.Context())
 
 	httputil.JSON(w, http.StatusOK, map[string]interface{}{
 		"requests_by_status": reqStats,
 		"departments":        deptStats,
-		"learning":           learnStats,
+		"approvals_audit":    auditList,
 	})
 }

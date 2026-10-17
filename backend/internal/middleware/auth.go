@@ -16,10 +16,10 @@ const UserContextKey contextKey = "user_claims"
 
 type Claims struct {
 	UserID       int    `json:"user_id"`
-	Email        string `json:"email"`
+	IIN          string `json:"iin"`
 	FullName     string `json:"full_name"`
-	Role         string `json:"role"`
-	DepartmentID int    `json:"department_id"`
+	Role         string `json:"role"` // 'employee', 'manager', 'hr'
+	DepartmentID *int   `json:"department_id"`
 	jwt.RegisteredClaims
 }
 
