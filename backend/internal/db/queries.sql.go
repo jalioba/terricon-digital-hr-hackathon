@@ -1880,6 +1880,20 @@ func (q *Queries) UpdateTaskStatusWithComment(ctx context.Context, arg UpdateTas
 	return err
 }
 
+const updateUserPassword = `-- name: UpdateUserPassword :exec
+UPDATE users SET password_hash = $2 WHERE id = $1
+`
+
+type UpdateUserPasswordParams struct {
+	ID           int    `json:"id"`
+	PasswordHash string `json:"password_hash"`
+}
+
+func (q *Queries) UpdateUserPassword(ctx context.Context, arg UpdateUserPasswordParams) error {
+	_, err := q.db.Exec(ctx, updateUserPassword, arg.ID, arg.PasswordHash)
+	return err
+}
+
 const updateVacationDays = `-- name: UpdateVacationDays :exec
 UPDATE users SET vacation_days_left = $2 WHERE id = $1
 `

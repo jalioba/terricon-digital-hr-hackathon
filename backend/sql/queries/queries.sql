@@ -288,4 +288,8 @@ SELECT
   (SELECT COUNT(*)::int FROM requests WHERE status = 'pending') as pending_requests,
   (SELECT COUNT(*)::int FROM tasks WHERE status != 'done') as active_tasks;
 
+-- name: UpdateUserPassword :exec
+UPDATE users SET password_hash = $2 WHERE id = $1;
+
+
 

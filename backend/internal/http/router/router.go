@@ -62,6 +62,7 @@ func NewRouter(cfg config.Config, q *db.Queries, zup zup1c.Client, doc documento
 
 			// Current user profile
 			p.Get("/me", profH.GetMe)
+			p.Put("/profile/password", profH.ChangePassword)
 
 			// Document upload to Supabase Storage
 			p.Post("/upload", reqH.UploadDocument)
