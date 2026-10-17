@@ -83,6 +83,7 @@ func NewRouter(cfg config.Config, q *db.Queries, zup zup1c.Client, doc documento
 			p.Post("/tasks", teamH.CreateTask)
 			p.Put("/tasks/{id}/assign", teamH.AssignTask)
 			p.Put("/tasks/{id}/status", teamH.UpdateTaskStatus)
+			p.Delete("/tasks/{id}", teamH.DeleteTask)
 
 			// Academy
 			p.Get("/courses", acadH.ListCourses)

@@ -171,7 +171,7 @@
           <span>{{ passwordSuccess() }}</span>
         </div>
 
-        <form class="password-form" (ngSubmit)="changePassword()">
+        <div class="password-form">
           <div class="form-grid">
             <!-- Current Password -->
             <div class="form-group">
@@ -184,6 +184,7 @@
                   [ngModel]="currentPassword()"
                   (ngModelChange)="currentPassword.set($event)"
                   name="currentPassword"
+                  autocomplete="current-password"
                   required
                 />
                 <button
@@ -208,6 +209,7 @@
                   [ngModel]="newPassword()"
                   (ngModelChange)="newPassword.set($event)"
                   name="newPassword"
+                  autocomplete="new-password"
                   required
                 />
                 <button
@@ -231,6 +233,7 @@
                 [ngModel]="confirmPassword()"
                 (ngModelChange)="confirmPassword.set($event)"
                 name="confirmPassword"
+                autocomplete="new-password"
                 required
               />
             </div>
@@ -238,15 +241,16 @@
 
           <div class="form-actions">
             <button
-              type="submit"
+              type="button"
               class="btn-submit-pass"
+              (click)="changePassword()"
               [disabled]="isSubmittingPass() || !currentPassword() || !newPassword() || !confirmPassword()"
             >
               <span class="spinner" *ngIf="isSubmittingPass()"></span>
               <span>{{ isSubmittingPass() ? 'Сохранение пароля...' : 'Обновить пароль' }}</span>
             </button>
           </div>
-        </form>
+        </div>
       </div>
     </section>
   </div>

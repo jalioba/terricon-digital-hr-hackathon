@@ -165,6 +165,9 @@ UPDATE tasks SET status = $2, rework_comment = $3, updated_at = now() WHERE id =
 -- name: GetTask :one
 SELECT * FROM tasks WHERE id = $1;
 
+-- name: DeleteTask :exec
+DELETE FROM tasks WHERE id = $1;
+
 -- name: ListCourses :many
 SELECT * FROM courses ORDER BY id;
 

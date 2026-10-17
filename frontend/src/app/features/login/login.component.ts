@@ -32,6 +32,7 @@ export class LoginComponent {
     this.iin = iin;
     this.password = pass;
     this.errorMessage.set('');
+    this.onSubmit();
   }
 
   onSubmit(): void {

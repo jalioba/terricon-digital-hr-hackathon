@@ -214,9 +214,9 @@ export class AcademyComponent implements OnInit {
       error: (err) => console.error('Failed to load questions', err)
     });
 
-    // Update progress in DB if not completed yet
-    if (course.status !== 'completed' && course.progress === 0) {
-      this.updateProgress(course.id, 25);
+    // Only mark status as in_progress if not completed yet, keep progress at earned value
+    if (course.status === 'not_started') {
+      this.updateProgress(course.id, 0);
     }
   }
 
@@ -227,15 +227,18 @@ export class AcademyComponent implements OnInit {
     const total = course.lessons.length;
     const current = this.currentLessonIndex();
 
-    if (current < total - 1) {
+    if (total > 0 && current < total - 1) {
       const nextIdx = current + 1;
       this.currentLessonIndex.set(nextIdx);
-      const calculatedProgress = Math.min(80, Math.round(((nextIdx + 1) / total) * 80));
+      const calculatedProgress = Math.round(((nextIdx) / total) * 75);
       if (course.status !== 'completed' && course.progress < calculatedProgress) {
         this.updateProgress(course.id, calculatedProgress);
       }
     } else {
-      // Proceed to Quiz
+      // Completed all lessons, ready for Quiz (75% progress)
+      if (course.status !== 'completed' && course.progress < 75) {
+        this.updateProgress(course.id, 75);
+      }
       this.isQuizActive.set(true);
     }
   }
@@ -253,6 +256,10 @@ export class AcademyComponent implements OnInit {
   }
 
   startQuiz(): void {
+    const course = this.activeCourse();
+    if (course && course.status !== 'completed' && course.progress < 75) {
+      this.updateProgress(course.id, 75);
+    }
     this.isQuizActive.set(true);
   }
 

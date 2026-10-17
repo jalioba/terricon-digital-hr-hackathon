@@ -223,7 +223,7 @@ func (h *Handler) CreateTask(w http.ResponseWriter, r *http.Request) {
 		Title:        input.Title,
 		Description:  input.Description,
 		DepartmentID: deptID,
-		CreatedBy:    c.UserID,
+		CreatedBy:    &c.UserID,
 		AssignedTo:   assignedTo,
 		DueDate:      dueDate,
 		Status:       "todo",
@@ -495,4 +495,40 @@ func (h *Handler) GetAcademyProgress(w http.ResponseWriter, r *http.Request) {
 	}
 
 	httputil.JSON(w, http.StatusOK, progressList)
+}
+
+func (h *Handler) DeleteTask(w http.ResponseWriter, r *http.Request) {
+	c := middleware.GetClaims(r.Context())
+	if c == nil {
+		httputil.Error(w, http.StatusUnauthorized, "Неавторизован")
+		return
+	}
+
+	idStr := chi.URLParam(r, "id")
+	id, err := strconv.Atoi(idStr)
+	if err != nil {
+		httputil.Error(w, http.StatusBadRequest, "Неверный id задачи")
+		return
+	}
+
+	task, err := h.q.GetTask(r.Context(), id)
+	if err != nil {
+		httputil.Error(w, http.StatusNotFound, "Задача не найдена")
+		return
+	}
+
+	if c.Role == "manager" && c.DepartmentID != nil && task.DepartmentID != *c.DepartmentID {
+		httputil.Error(w, http.StatusForbidden, "Доступ запрещен: задача принадлежит другому отделу")
+		return
+	}
+
+	if err := h.q.DeleteTask(r.Context(), id); err != nil {
+		httputil.Error(w, http.StatusInternalServerError, "Ошибка удаления задачи: "+err.Error())
+		return
+	}
+
+	httputil.JSON(w, http.StatusOK, map[string]string{
+		"status":  "deleted",
+		"message": "Задача успешно удалена",
+	})
 }

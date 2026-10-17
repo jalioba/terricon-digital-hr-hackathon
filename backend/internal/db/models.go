@@ -114,7 +114,7 @@ type Task struct {
 	Title         string     `json:"title"`
 	Description   string     `json:"description"`
 	DepartmentID  int        `json:"department_id"`
-	CreatedBy     int        `json:"created_by"`
+	CreatedBy     *int       `json:"created_by"`
 	AssignedTo    *int       `json:"assigned_to"`
 	DueDate       *time.Time `json:"due_date"`
 	Status        string     `json:"status"`

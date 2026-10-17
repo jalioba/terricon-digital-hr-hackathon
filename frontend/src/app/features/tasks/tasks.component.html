@@ -454,11 +454,24 @@
             <!-- Card Title -->
             <div class="card-title strike">{{ task.title }}</div>
 
-            <!-- Card Footer: Assignee -->
+            <!-- Card Footer: Assignee & Trash Action -->
             <div class="card-footer">
               <div class="assignee-wrap" [title]="'Исполнитель: ' + (task.assignee_name || 'Не назначен')">
                 <span class="avatar-circle done">{{ getInitials(task.assignee_name) }}</span>
                 <span class="assignee-name">{{ task.assignee_name || 'Не назначен' }}</span>
+              </div>
+
+              <!-- Delete / Trash Action -->
+              <div class="card-actions" (click)="$event.stopPropagation()">
+                <button
+                  type="button"
+                  class="action-btn action-trash"
+                  (click)="deleteTask(task)"
+                  title="Отправить выполненное задание в мусорное ведро"
+                >
+                  <app-icon name="trash" [size]="12"></app-icon>
+                  <span>В корзину</span>
+                </button>
               </div>
             </div>
           </div>
@@ -594,6 +607,18 @@
                       </button>
                     </ng-container>
                   </ng-container>
+
+                  <!-- Trash Action for Completed (Done) Tasks -->
+                  <button
+                    type="button"
+                    class="tbl-action-btn action-trash"
+                    *ngIf="task.status === 'done'"
+                    (click)="deleteTask(task)"
+                    title="Отправить выполненное задание в мусорное ведро"
+                  >
+                    <app-icon name="trash" [size]="12"></app-icon>
+                    <span>В корзину</span>
+                  </button>
                 </div>
               </td>
             </tr>
@@ -980,6 +1005,17 @@
               </button>
             </div>
           </ng-container>
+          <!-- Trash Action for Completed (Done) Tasks in Modal -->
+          <button
+            type="button"
+            class="action-btn action-trash btn-lg"
+            *ngIf="task.status === 'done'"
+            (click)="deleteTask(task)"
+            title="Отправить выполненное задание в мусорное ведро"
+          >
+            <app-icon name="trash" [size]="14"></app-icon>
+            <span>В корзину (удалить)</span>
+          </button>
         </div>
       </div>
 

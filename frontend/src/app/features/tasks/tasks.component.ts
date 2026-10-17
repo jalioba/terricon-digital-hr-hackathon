@@ -433,6 +433,26 @@ export class TasksComponent implements OnInit {
     });
   }
 
+  // Отправить выполненную задачу в корзину (удалить)
+  deleteTask(task: TaskItem): void {
+    if (!confirm(`Вы действительно хотите отправить выполненную задачу «${task.title}» в корзину?`)) {
+      return;
+    }
+    this.api.delete(`/tasks/${task.id}`).subscribe({
+      next: () => {
+        this.tasks.update((list) => list.filter((t) => t.id !== task.id));
+        if (this.selectedTask()?.id === task.id) {
+          this.closeDetailModal();
+        }
+        this.showToast('Задача перемещена в корзину и удалена.');
+      },
+      error: (err) => {
+        console.error('Failed to delete task', err);
+        alert(err?.error?.error || 'Ошибка удаления задачи.');
+      }
+    });
+  }
+
   // ==========================================
   // TASK DETAILS MODAL
   // ==========================================

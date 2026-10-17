@@ -771,6 +771,18 @@
     }
   }
 
+  &.action-trash {
+    background-color: #fef2f2;
+    color: #dc2626;
+    border: 1px solid #fecaca;
+
+    &:hover {
+      background-color: #fee2e2;
+      color: #b91c1c;
+      border-color: #fca5a5;
+    }
+  }
+
   &.btn-lg {
     padding: 8px 14px;
     font-size: 13px;
@@ -904,6 +916,18 @@
       &.action-approve {
         background-color: #00a859;
         color: #ffffff;
+      }
+
+      &.action-trash {
+        background-color: #fef2f2;
+        border-color: #fecaca;
+        color: #dc2626;
+
+        &:hover {
+          background-color: #fee2e2;
+          color: #b91c1c;
+          border-color: #fca5a5;
+        }
       }
     }
   }

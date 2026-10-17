@@ -365,7 +365,7 @@ type CreateTaskParams struct {
 	Title        string     `json:"title"`
 	Description  string     `json:"description"`
 	DepartmentID int        `json:"department_id"`
-	CreatedBy    int        `json:"created_by"`
+	CreatedBy    *int       `json:"created_by"`
 	AssignedTo   *int       `json:"assigned_to"`
 	DueDate      *time.Time `json:"due_date"`
 	Status       string     `json:"status"`
@@ -451,6 +451,15 @@ DELETE FROM kb_documents WHERE id = $1
 
 func (q *Queries) DeleteKB(ctx context.Context, id int) error {
 	_, err := q.db.Exec(ctx, deleteKB, id)
+	return err
+}
+
+const deleteTask = `-- name: DeleteTask :exec
+DELETE FROM tasks WHERE id = $1
+`
+
+func (q *Queries) DeleteTask(ctx context.Context, id int) error {
+	_, err := q.db.Exec(ctx, deleteTask, id)
 	return err
 }
 
@@ -834,7 +843,7 @@ type ListAllTasksRow struct {
 	Title         string     `json:"title"`
 	Description   string     `json:"description"`
 	DepartmentID  int        `json:"department_id"`
-	CreatedBy     int        `json:"created_by"`
+	CreatedBy     *int       `json:"created_by"`
 	AssignedTo    *int       `json:"assigned_to"`
 	DueDate       *time.Time `json:"due_date"`
 	Status        string     `json:"status"`
@@ -1533,7 +1542,7 @@ type ListTasksByDepartmentRow struct {
 	Title         string     `json:"title"`
 	Description   string     `json:"description"`
 	DepartmentID  int        `json:"department_id"`
-	CreatedBy     int        `json:"created_by"`
+	CreatedBy     *int       `json:"created_by"`
 	AssignedTo    *int       `json:"assigned_to"`
 	DueDate       *time.Time `json:"due_date"`
 	Status        string     `json:"status"`
@@ -1597,7 +1606,7 @@ type ListTasksByUserRow struct {
 	Title         string     `json:"title"`
 	Description   string     `json:"description"`
 	DepartmentID  int        `json:"department_id"`
-	CreatedBy     int        `json:"created_by"`
+	CreatedBy     *int       `json:"created_by"`
 	AssignedTo    *int       `json:"assigned_to"`
 	DueDate       *time.Time `json:"due_date"`
 	Status        string     `json:"status"`
