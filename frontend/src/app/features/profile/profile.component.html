@@ -1,0 +1,253 @@
+<div class="profile-page">
+  <!-- Page Header -->
+  <header class="profile-header">
+    <div class="header-titles">
+      <h1 class="page-title">Профиль сотрудника</h1>
+      <p class="page-subtitle">Личное кадровое досье, параметры безопасности и интеграция с 1С:ЗУП</p>
+    </div>
+  </header>
+
+  <!-- Loading State -->
+  <div class="profile-loading" *ngIf="isLoading()">
+    <div class="loading-spinner"></div>
+    <p>Загрузка кадрового досье из 1С:ЗУП...</p>
+  </div>
+
+  <div class="profile-content" *ngIf="!isLoading() && profileData() as prof">
+    <!-- Hero Dossier Card -->
+    <section class="hero-card">
+      <div class="hero-avatar-col">
+        <div class="avatar-large" [attr.data-role]="prof.role">
+          {{ userInitials() }}
+        </div>
+      </div>
+
+      <div class="hero-info-col">
+        <div class="hero-top-row">
+          <h2 class="user-fullname">{{ prof.full_name }}</h2>
+          <span class="role-badge" [attr.data-role]="prof.role">
+            <app-icon name="shield" size="14"></app-icon>
+            <span *ngIf="prof.role === 'hr'">HR-директор</span>
+            <span *ngIf="prof.role === 'manager'">Руководитель</span>
+            <span *ngIf="prof.role === 'employee'">Работник</span>
+          </span>
+        </div>
+
+        <div class="hero-meta-row">
+          <div class="meta-item">
+            <app-icon name="briefcase" size="15"></app-icon>
+            <span>{{ prof.position || 'Специалист' }}</span>
+          </div>
+          <div class="meta-divider">•</div>
+          <div class="meta-item">
+            <app-icon name="home" size="15"></app-icon>
+            <span>{{ prof.company }}</span>
+          </div>
+          <div class="meta-divider" *ngIf="prof.dept_ru">•</div>
+          <div class="meta-item" *ngIf="prof.dept_ru">
+            <app-icon name="users" size="15"></app-icon>
+            <span class="dept-text">{{ prof.dept_ru }}</span>
+          </div>
+        </div>
+
+        <div class="hero-iin-row">
+          <span class="iin-label">ИИН:</span>
+          <span class="iin-value">{{ prof.iin }}</span>
+        </div>
+      </div>
+
+      <!-- 1C:ZUP Sync Badge Column -->
+      <div class="hero-sync-col">
+        <div class="zup-sync-card">
+          <div class="zup-badge-header">
+            <span class="sync-dot"></span>
+            <span class="sync-title">Синхронизировано</span>
+          </div>
+          <div class="zup-source-text">{{ zupSource() }}</div>
+          <div class="zup-status-sub">Режим: Read-Only (Только чтение)</div>
+        </div>
+      </div>
+    </section>
+
+    <!-- KPI & Leave Metrics Grid -->
+    <section class="metrics-grid">
+      <!-- Vacation Card -->
+      <div class="metric-card vacation-card">
+        <div class="metric-header">
+          <div class="metric-icon-wrap vacation-icon">
+            <app-icon name="calendar" size="20"></app-icon>
+          </div>
+          <span class="metric-label">Остаток отпуска</span>
+        </div>
+        <div class="metric-value-wrap">
+          <span class="metric-big-number">{{ prof.vacation_days_left }}</span>
+          <span class="metric-total-days">/ 24 дня</span>
+        </div>
+        <!-- Progress Bar -->
+        <div class="progress-bar-track">
+          <div class="progress-bar-fill" [style.width.%]="vacationPercent()"></div>
+        </div>
+        <p class="metric-caption">
+          Начисляется по 2 календарных дня за каждый полный месяц работы.
+        </p>
+      </div>
+
+      <!-- Tenure Card -->
+      <div class="metric-card">
+        <div class="metric-header">
+          <div class="metric-icon-wrap tenure-icon">
+            <app-icon name="clock" size="20"></app-icon>
+          </div>
+          <span class="metric-label">Стаж в компании</span>
+        </div>
+        <div class="metric-value-wrap">
+          <span class="metric-big-number">{{ tenureText() }}</span>
+        </div>
+        <p class="metric-caption">
+          Принят на работу: <strong>{{ prof.hired_at | date:'dd.MM.yyyy' }}</strong>
+        </p>
+      </div>
+
+      <!-- Tasks Activity Card -->
+      <div class="metric-card">
+        <div class="metric-header">
+          <div class="metric-icon-wrap tasks-icon">
+            <app-icon name="kanban" size="20"></app-icon>
+          </div>
+          <span class="metric-label">Мои задачи</span>
+        </div>
+        <div class="metric-tasks-split">
+          <div class="task-stat-col">
+            <span class="stat-num active-color">{{ activeTasksCount() }}</span>
+            <span class="stat-lbl">В работе</span>
+          </div>
+          <div class="task-stat-col">
+            <span class="stat-num done-color">{{ completedTasksCount() }}</span>
+            <span class="stat-lbl">Завершено</span>
+          </div>
+        </div>
+        <p class="metric-caption">Управление задачами в разделе «Задачи»</p>
+      </div>
+
+      <!-- Academy Card -->
+      <div class="metric-card">
+        <div class="metric-header">
+          <div class="metric-icon-wrap academy-icon">
+            <app-icon name="graduation-cap" size="20"></app-icon>
+          </div>
+          <span class="metric-label">Jana Academy</span>
+        </div>
+        <div class="metric-value-wrap">
+          <span class="metric-big-number">100%</span>
+        </div>
+        <p class="metric-caption">
+          Обязательные курсы адаптации и безопасности пройдены
+        </p>
+      </div>
+    </section>
+
+    <!-- Security & Password Change Card -->
+    <section class="security-card">
+      <div class="security-card-header">
+        <div class="sec-title-wrap">
+          <app-icon name="shield" size="22" extraClass="sec-icon"></app-icon>
+          <div>
+            <h3 class="sec-title">Безопасность и смена пароля</h3>
+            <p class="sec-subtitle">Вы можете самостоятельно обновить пароль для доступа к личному кабинету</p>
+          </div>
+        </div>
+      </div>
+
+      <div class="security-card-body">
+        <!-- Error Alert -->
+        <div class="alert-box alert-error" *ngIf="passwordError()">
+          <app-icon name="alert-triangle" size="18"></app-icon>
+          <span>{{ passwordError() }}</span>
+        </div>
+
+        <!-- Success Alert -->
+        <div class="alert-box alert-success" *ngIf="passwordSuccess()">
+          <app-icon name="check-circle" size="18"></app-icon>
+          <span>{{ passwordSuccess() }}</span>
+        </div>
+
+        <form class="password-form" (ngSubmit)="changePassword()">
+          <div class="form-grid">
+            <!-- Current Password -->
+            <div class="form-group">
+              <label class="form-label">Текущий пароль:</label>
+              <div class="input-with-eye">
+                <input
+                  [type]="showCurrentPass() ? 'text' : 'password'"
+                  class="form-control"
+                  placeholder="••••••••••••"
+                  [ngModel]="currentPassword()"
+                  (ngModelChange)="currentPassword.set($event)"
+                  name="currentPassword"
+                  required
+                />
+                <button
+                  type="button"
+                  class="btn-eye"
+                  (click)="showCurrentPass.set(!showCurrentPass())"
+                  title="Показать / скрыть пароль"
+                >
+                  <app-icon [name]="showCurrentPass() ? 'eye-off' : 'eye'" size="16"></app-icon>
+                </button>
+              </div>
+            </div>
+
+            <!-- New Password -->
+            <div class="form-group">
+              <label class="form-label">Новый пароль (от 6 символов):</label>
+              <div class="input-with-eye">
+                <input
+                  [type]="showNewPass() ? 'text' : 'password'"
+                  class="form-control"
+                  placeholder="••••••••••••"
+                  [ngModel]="newPassword()"
+                  (ngModelChange)="newPassword.set($event)"
+                  name="newPassword"
+                  required
+                />
+                <button
+                  type="button"
+                  class="btn-eye"
+                  (click)="showNewPass.set(!showNewPass())"
+                  title="Показать / скрыть пароль"
+                >
+                  <app-icon [name]="showNewPass() ? 'eye-off' : 'eye'" size="16"></app-icon>
+                </button>
+              </div>
+            </div>
+
+            <!-- Confirm New Password -->
+            <div class="form-group">
+              <label class="form-label">Повторите новый пароль:</label>
+              <input
+                type="password"
+                class="form-control"
+                placeholder="••••••••••••"
+                [ngModel]="confirmPassword()"
+                (ngModelChange)="confirmPassword.set($event)"
+                name="confirmPassword"
+                required
+              />
+            </div>
+          </div>
+
+          <div class="form-actions">
+            <button
+              type="submit"
+              class="btn-submit-pass"
+              [disabled]="isSubmittingPass() || !currentPassword() || !newPassword() || !confirmPassword()"
+            >
+              <span class="spinner" *ngIf="isSubmittingPass()"></span>
+              <span>{{ isSubmittingPass() ? 'Сохранение пароля...' : 'Обновить пароль' }}</span>
+            </button>
+          </div>
+        </form>
+      </div>
+    </section>
+  </div>
+</div>

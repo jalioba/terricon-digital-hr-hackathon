@@ -5,8 +5,10 @@ export interface NotificationItem {
   id: number;
   user_id: number;
   kind: string;
-  title_ru: string;
-  title_kz: string;
+  title?: string;
+  message?: string;
+  title_ru?: string;
+  title_kz?: string;
   link: string;
   read: boolean;
   created_at: string;
@@ -21,21 +23,25 @@ export class NotificationService {
   notifications = signal<NotificationItem[]>([
     {
       id: 1,
-      user_id: 5,
+      user_id: 0,
       kind: 'course',
+      title: 'Вам назначен обязательный курс «Информационная безопасность»',
       title_ru: 'Вам назначен обязательный курс «Информационная безопасность»',
       title_kz: 'Сізге «Ақпараттық қауіпсіздік» міндетті курсы тағайындалды',
-      link: '/academy/1',
+      message: 'Пройдите тестирование в разделе Jana Academy',
+      link: '/academy',
       read: false,
       created_at: new Date().toISOString()
     },
     {
       id: 2,
-      user_id: 5,
+      user_id: 0,
       kind: 'system',
+      title: 'Добро пожаловать в единую HR-платформу JanaMen!',
       title_ru: 'Добро пожаловать в единую HR-платформу JanaMen!',
       title_kz: 'JanaMen бірыңғай HR-платформасына қош келдіңіз!',
-      link: '/dashboard',
+      message: 'Все кадровые процессы, задачи и заявки в одном месте',
+      link: '/tasks',
       read: false,
       created_at: new Date(Date.now() - 3600000).toISOString()
     }
@@ -48,8 +54,11 @@ export class NotificationService {
       .subscribe({
         next: (res) => {
           if (res && res.notifications) {
-            this.notifications.set(res.notifications);
-            this.unreadCount.set(res.unread_count);
+            // If backend has notifications, use them; if empty, keep initial helpful onboarding notifications
+            if (res.notifications.length > 0) {
+              this.notifications.set(res.notifications);
+              this.unreadCount.set(res.unread_count);
+            }
           }
         },
         error: () => {
@@ -77,6 +86,7 @@ export class NotificationService {
       id: Date.now(),
       user_id: 0,
       kind,
+      title: titleRu,
       title_ru: titleRu,
       title_kz: titleKz,
       link,
@@ -85,5 +95,12 @@ export class NotificationService {
     };
     this.notifications.update(items => [item, ...items]);
     this.unreadCount.update(c => c + 1);
+  }
+
+  getNotificationTitle(item: NotificationItem, lang: string = 'ru'): string {
+    if (lang === 'kz' && item.title_kz) return item.title_kz;
+    if (item.title_ru) return item.title_ru;
+    if (item.title) return item.title;
+    return item.message || 'Уведомление';
   }
 }

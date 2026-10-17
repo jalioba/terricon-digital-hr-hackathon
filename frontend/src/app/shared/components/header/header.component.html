@@ -85,16 +85,66 @@
         {{ i18n.currentLang() === 'ru' ? 'RU' : 'KZ' }}
       </button>
 
-      <!-- Mail / Notifications Envelope Button -->
-      <button
-        type="button"
-        class="action-icon-btn"
-        (click)="toggleNotifications()"
-        title="Уведомления и почта"
-      >
-        <app-icon name="mail" [size]="19"></app-icon>
-        <span class="badge-dot" *ngIf="unreadCount() > 0"></span>
-      </button>
+      <!-- Notifications Bell Button & Popover -->
+      <div class="notifications-wrapper">
+        <button
+          type="button"
+          class="action-icon-btn"
+          [class.active]="isNotificationsOpen()"
+          (click)="toggleNotifications()"
+          title="Центр уведомлений"
+        >
+          <app-icon name="bell" [size]="19"></app-icon>
+          <span class="badge-count" *ngIf="unreadCount() > 0">{{ unreadCount() }}</span>
+        </button>
+
+        <!-- Notifications Dropdown Popover -->
+        <div class="notifications-popover" *ngIf="isNotificationsOpen()">
+          <div class="notif-header">
+            <div class="notif-header-title">
+              <span class="title-text">Уведомления</span>
+              <span class="notif-unread-badge" *ngIf="unreadCount() > 0">{{ unreadCount() }} новых</span>
+            </div>
+            <button
+              type="button"
+              class="btn-mark-all-read"
+              *ngIf="unreadCount() > 0"
+              (click)="markAllRead()"
+              title="Отметить все как прочитанные"
+            >
+              Прочитать все
+            </button>
+          </div>
+
+          <div class="notif-list">
+            <div
+              *ngFor="let notif of notifications()"
+              class="notif-item"
+              [class.unread]="!notif.read"
+              (click)="handleNotificationClick(notif)"
+            >
+              <div class="notif-icon-circle" [attr.data-kind]="notif.kind">
+                <app-icon [name]="getIconForKind(notif.kind)" [size]="16"></app-icon>
+              </div>
+
+              <div class="notif-content">
+                <div class="notif-title">{{ getNotificationTitle(notif) }}</div>
+                <div class="notif-message" *ngIf="notif.message && notif.message !== notif.title">
+                  {{ notif.message }}
+                </div>
+                <div class="notif-time">{{ notif.created_at | date:'dd.MM, HH:mm' }}</div>
+              </div>
+
+              <div class="notif-unread-dot" *ngIf="!notif.read"></div>
+            </div>
+
+            <div class="notif-empty" *ngIf="notifications().length === 0">
+              <app-icon name="check-circle" [size]="32" extraClass="empty-icon"></app-icon>
+              <p class="empty-text">Все уведомления прочитаны</p>
+            </div>
+          </div>
+        </div>
+      </div>
 
       <!-- User Profile Avatar & Dropdown -->
       <div class="profile-dropdown-wrapper">

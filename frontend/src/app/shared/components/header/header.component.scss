@@ -142,6 +142,11 @@
 }
 
 /* Action Icon Button (Mail / Notifications) */
+/* Notifications Dropdown */
+.notifications-wrapper {
+  position: relative;
+}
+
 .action-icon-btn {
   position: relative;
   display: inline-flex;
@@ -154,21 +159,209 @@
   background-color: #ffffff;
   color: #4b5563;
   cursor: pointer;
-  transition: border-color 0.15s ease, color 0.15s ease;
+  transition: all 0.15s ease;
 
-  &:hover {
+  &:hover, &.active {
     border-color: #00a859;
     color: #00a859;
   }
 
-  .badge-dot {
+  .badge-count {
     position: absolute;
-    top: 5px;
-    right: 5px;
-    width: 6px;
-    height: 6px;
-    background-color: #dc2626;
-    border-radius: 50%;
+    top: -5px;
+    right: -5px;
+    min-width: 17px;
+    height: 17px;
+    padding: 0 4px;
+    background-color: #ef4444;
+    color: #ffffff;
+    border-radius: 10px;
+    font-size: 10px;
+    font-weight: 700;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    border: 2px solid #ffffff;
+    line-height: 1;
+  }
+}
+
+.notifications-popover {
+  position: absolute;
+  top: 42px;
+  right: 0;
+  width: 350px;
+  max-height: 440px;
+  background-color: #ffffff;
+  border: 1px solid #e2e8f0;
+  border-radius: 12px;
+  box-shadow: 0 10px 25px -5px rgba(15, 23, 42, 0.12), 0 8px 10px -6px rgba(15, 23, 42, 0.08);
+  z-index: 100;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  animation: popoverFadeIn 0.15s ease-out;
+
+  .notif-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 12px 16px;
+    border-bottom: 1px solid #f1f5f9;
+    background: #f8fafc;
+
+    .notif-header-title {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+
+      .title-text {
+        font-size: 13.5px;
+        font-weight: 700;
+        color: #0f172a;
+      }
+
+      .notif-unread-badge {
+        font-size: 10.5px;
+        font-weight: 600;
+        padding: 2px 7px;
+        background: #ecfdf5;
+        color: #059669;
+        border-radius: 10px;
+      }
+    }
+
+    .btn-mark-all-read {
+      border: none;
+      background: transparent;
+      font-size: 11.5px;
+      font-weight: 500;
+      color: #00a859;
+      cursor: pointer;
+      padding: 2px 4px;
+      border-radius: 4px;
+
+      &:hover {
+        text-decoration: underline;
+      }
+    }
+  }
+
+  .notif-list {
+    overflow-y: auto;
+    max-height: 380px;
+
+    .notif-item {
+      display: flex;
+      align-items: flex-start;
+      gap: 12px;
+      padding: 12px 16px;
+      border-bottom: 1px solid #f1f5f9;
+      cursor: pointer;
+      transition: background-color 0.15s ease;
+      position: relative;
+
+      &:hover {
+        background-color: #f8fafc;
+      }
+
+      &.unread {
+        background-color: #f0fdf4;
+        &:hover {
+          background-color: #e6f9ed;
+        }
+      }
+
+      .notif-icon-circle {
+        width: 32px;
+        height: 32px;
+        border-radius: 8px;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        flex-shrink: 0;
+        background: #eff6ff;
+        color: #2563eb;
+
+        &[data-kind='course'] {
+          background: #f5f3ff;
+          color: #7c3aed;
+        }
+        &[data-kind='task'] {
+          background: #f0fdf4;
+          color: #16a34a;
+        }
+        &[data-kind='request'] {
+          background: #fff7ed;
+          color: #ea580c;
+        }
+        &[data-kind='escalation'] {
+          background: #fef2f2;
+          color: #dc2626;
+        }
+      }
+
+      .notif-content {
+        flex: 1;
+
+        .notif-title {
+          font-size: 12.5px;
+          font-weight: 600;
+          color: #1e293b;
+          line-height: 1.35;
+        }
+
+        .notif-message {
+          font-size: 11.5px;
+          color: #64748b;
+          margin-top: 2px;
+          line-height: 1.3;
+        }
+
+        .notif-time {
+          font-size: 10.5px;
+          color: #94a3b8;
+          margin-top: 4px;
+        }
+      }
+
+      .notif-unread-dot {
+        width: 7px;
+        height: 7px;
+        border-radius: 50%;
+        background: #10b981;
+        margin-top: 4px;
+        flex-shrink: 0;
+      }
+    }
+
+    .notif-empty {
+      padding: 36px 20px;
+      text-align: center;
+      color: #94a3b8;
+
+      .empty-icon {
+        color: #cbd5e1;
+        margin-bottom: 8px;
+      }
+
+      .empty-text {
+        font-size: 12.5px;
+        color: #64748b;
+        margin: 0;
+      }
+    }
+  }
+}
+
+@keyframes popoverFadeIn {
+  from {
+    opacity: 0;
+    transform: translateY(-6px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
   }
 }
 
