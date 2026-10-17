@@ -1,0 +1,273 @@
+.spotlight-tour-container {
+  position: fixed;
+  top: 0;
+  left: 0;
+  width: 100vw;
+  height: 100vh;
+  z-index: 99999;
+  pointer-events: auto;
+  user-select: none;
+}
+
+/* SVG Mask Overlay */
+.spotlight-svg-mask {
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+  pointer-events: auto;
+  transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+/* Fallback full backdrop */
+.spotlight-fallback-backdrop {
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+  background-color: rgba(15, 23, 42, 0.76);
+  backdrop-filter: blur(2px);
+}
+
+/* Animated Ring around Target */
+.spotlight-highlight-ring {
+  position: absolute;
+  border-radius: 12px;
+  border: 2px solid #00a859;
+  box-shadow: 0 0 0 4px rgba(0, 168, 89, 0.25), 0 0 24px rgba(0, 168, 89, 0.35);
+  pointer-events: none;
+  transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+  animation: pulseRing 2s infinite ease-in-out;
+}
+
+@keyframes pulseRing {
+  0% {
+    box-shadow: 0 0 0 2px rgba(0, 168, 89, 0.3), 0 0 16px rgba(0, 168, 89, 0.2);
+  }
+  50% {
+    box-shadow: 0 0 0 6px rgba(0, 168, 89, 0.45), 0 0 28px rgba(0, 168, 89, 0.45);
+  }
+  100% {
+    box-shadow: 0 0 0 2px rgba(0, 168, 89, 0.3), 0 0 16px rgba(0, 168, 89, 0.2);
+  }
+}
+
+/* Floating Tooltip Card */
+.spotlight-card {
+  position: absolute;
+  width: 380px;
+  max-width: calc(100vw - 32px);
+  background-color: #ffffff;
+  border-radius: 14px;
+  border: 1px solid #e2e8f0;
+  box-shadow: 0 20px 45px -10px rgba(15, 23, 42, 0.35), 0 0 0 1px rgba(0, 0, 0, 0.05);
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  z-index: 100000;
+  pointer-events: auto;
+  animation: cardPopIn 0.25s cubic-bezier(0.16, 1, 0.3, 1);
+  transition: top 0.3s cubic-bezier(0.4, 0, 0.2, 1), left 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+@keyframes cardPopIn {
+  from {
+    opacity: 0;
+    transform: translateY(8px) scale(0.97);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0) scale(1);
+  }
+}
+
+/* Header */
+.card-header {
+  padding: 14px 18px 10px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  border-bottom: 1px solid #f1f5f9;
+
+  .guide-brand {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+  }
+
+  .guide-avatar {
+    width: 26px;
+    height: 26px;
+    border-radius: 7px;
+    background: linear-gradient(135deg, #00a859 0%, #008f4c 100%);
+    color: #ffffff;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    box-shadow: 0 2px 5px rgba(0, 168, 89, 0.3);
+  }
+
+  .guide-titles {
+    display: flex;
+    flex-direction: column;
+
+    .guide-label {
+      font-size: 11.5px;
+      font-weight: 700;
+      color: #0f172a;
+      letter-spacing: -0.01em;
+      line-height: 1.2;
+    }
+
+    .step-counter {
+      font-size: 10.5px;
+      color: #64748b;
+      font-weight: 500;
+
+      strong {
+        color: #00a859;
+        font-weight: 700;
+      }
+    }
+  }
+
+  .btn-close-tour {
+    width: 28px;
+    height: 28px;
+    border-radius: 6px;
+    background: transparent;
+    border: none;
+    color: #94a3b8;
+    cursor: pointer;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    transition: all 0.15s ease;
+
+    &:hover {
+      background-color: #f1f5f9;
+      color: #0f172a;
+    }
+  }
+}
+
+/* Body */
+.card-body {
+  padding: 14px 18px;
+
+  .step-title {
+    font-size: 15px;
+    font-weight: 700;
+    color: #0f172a;
+    line-height: 1.35;
+    margin: 0 0 6px 0;
+    letter-spacing: -0.01em;
+  }
+
+  .step-desc {
+    font-size: 12.5px;
+    color: #475569;
+    line-height: 1.45;
+    margin: 0;
+  }
+}
+
+/* Footer */
+.card-footer {
+  padding: 12px 18px 14px;
+  background-color: #f8fafc;
+  border-top: 1px solid #f1f5f9;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+
+  .step-dots {
+    display: flex;
+    align-items: center;
+    gap: 5px;
+
+    .step-dot {
+      width: 7px;
+      height: 7px;
+      border-radius: 50%;
+      background-color: #cbd5e1;
+      cursor: pointer;
+      transition: all 0.2s ease;
+
+      &:hover {
+        background-color: #94a3b8;
+      }
+
+      &.passed {
+        background-color: #86efac;
+      }
+
+      &.active {
+        width: 18px;
+        border-radius: 4px;
+        background-color: #00a859;
+      }
+    }
+  }
+
+  .footer-actions {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+
+    .btn-tour-nav {
+      display: inline-flex;
+      align-items: center;
+      gap: 5px;
+      padding: 6px 12px;
+      font-size: 12px;
+      font-weight: 600;
+      border-radius: 6px;
+      cursor: pointer;
+      transition: all 0.15s ease;
+
+      &.btn-tour-prev {
+        background-color: #ffffff;
+        color: #475569;
+        border: 1px solid #cbd5e1;
+
+        &:hover {
+          background-color: #f1f5f9;
+          color: #0f172a;
+        }
+      }
+
+      &.btn-tour-next {
+        background-color: #00a859;
+        color: #ffffff;
+        border: 1px solid transparent;
+
+        &:hover {
+          background-color: #008f4c;
+        }
+
+        &.btn-tour-finish {
+          background: linear-gradient(135deg, #00a859 0%, #0284c7 100%);
+          padding: 6px 14px;
+          box-shadow: 0 2px 8px rgba(0, 168, 89, 0.25);
+
+          &:hover {
+            opacity: 0.95;
+            box-shadow: 0 4px 12px rgba(0, 168, 89, 0.35);
+          }
+        }
+      }
+    }
+  }
+}
+
+/* Mobile Adjustments */
+@media (max-width: 480px) {
+  .spotlight-card {
+    width: calc(100vw - 24px);
+    left: 12px !important;
+  }
+}

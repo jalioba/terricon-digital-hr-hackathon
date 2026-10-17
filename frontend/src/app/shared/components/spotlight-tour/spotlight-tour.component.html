@@ -1,0 +1,129 @@
+<div class="spotlight-tour-container" *ngIf="tourService.isActive() && tourService.currentStep() as step">
+  <!-- SVG Mask Backdrop with Rounded Cutout -->
+  <svg class="spotlight-svg-mask" *ngIf="cutout() as cut">
+    <defs>
+      <mask id="tour-cutout-mask">
+        <!-- White shows the dark overlay -->
+        <rect x="0" y="0" width="100%" height="100%" fill="#ffffff" />
+        <!-- Black creates the transparent hole revealing the target element -->
+        <rect
+          [attr.x]="cut.x"
+          [attr.y]="cut.y"
+          [attr.width]="cut.width"
+          [attr.height]="cut.height"
+          rx="12"
+          ry="12"
+          fill="#000000"
+        />
+      </mask>
+    </defs>
+    <!-- Masked dark backdrop layer -->
+    <rect
+      x="0"
+      y="0"
+      width="100%"
+      height="100%"
+      fill="rgba(15, 23, 42, 0.76)"
+      mask="url(#tour-cutout-mask)"
+    />
+  </svg>
+
+  <!-- Fallback full backdrop if no target rect -->
+  <div class="spotlight-fallback-backdrop" *ngIf="!cutout()"></div>
+
+  <!-- Animated Green Pulsing Ring around Target -->
+  <div
+    class="spotlight-highlight-ring"
+    *ngIf="cutout() as cut"
+    [style.top.px]="cut.y"
+    [style.left.px]="cut.x"
+    [style.width.px]="cut.width"
+    [style.height.px]="cut.height"
+  ></div>
+
+  <!-- Floating Guide Card -->
+  <div
+    class="spotlight-card"
+    [style.top]="cardStyle().top"
+    [style.left]="cardStyle().left"
+    (click)="$event.stopPropagation()"
+  >
+    <!-- Header -->
+    <div class="card-header">
+      <div class="guide-brand">
+        <div class="guide-avatar">
+          <app-icon name="sparkles" [size]="14"></app-icon>
+        </div>
+        <div class="guide-titles">
+          <span class="guide-label">Jana Guide</span>
+          <span class="step-counter">
+            {{ i18n.currentLang() === 'ru' ? 'Шаг' : 'Қадам' }}
+            <strong>{{ tourService.currentStepIndex() + 1 }}</strong> / {{ tourService.steps().length }}
+          </span>
+        </div>
+      </div>
+
+      <button
+        type="button"
+        class="btn-close-tour"
+        (click)="tourService.skipTour()"
+        [title]="i18n.currentLang() === 'ru' ? 'Завершить тур' : 'Турды аяқтау'"
+      >
+        <app-icon name="x" [size]="16"></app-icon>
+      </button>
+    </div>
+
+    <!-- Body -->
+    <div class="card-body">
+      <h3 class="step-title">
+        {{ i18n.currentLang() === 'ru' ? step.titleRu : step.titleKz }}
+      </h3>
+      <p class="step-desc">
+        {{ i18n.currentLang() === 'ru' ? step.descriptionRu : step.descriptionKz }}
+      </p>
+    </div>
+
+    <!-- Footer with progress dots & actions -->
+    <div class="card-footer">
+      <div class="step-dots">
+        <span
+          class="step-dot"
+          *ngFor="let s of tourService.steps(); let i = index"
+          [class.active]="i === tourService.currentStepIndex()"
+          [class.passed]="i < tourService.currentStepIndex()"
+          (click)="tourService.goToStep(i)"
+          [title]="'Шаг ' + (i + 1)"
+        ></span>
+      </div>
+
+      <div class="footer-actions">
+        <button
+          type="button"
+          class="btn-tour-nav btn-tour-prev"
+          *ngIf="!tourService.isFirstStep()"
+          (click)="tourService.prevStep()"
+        >
+          <app-icon name="arrow-left" [size]="13"></app-icon>
+          <span>{{ i18n.currentLang() === 'ru' ? 'Назад' : 'Артқа' }}</span>
+        </button>
+
+        <button
+          type="button"
+          class="btn-tour-nav btn-tour-next"
+          [class.btn-tour-finish]="tourService.isLastStep()"
+          (click)="tourService.nextStep()"
+        >
+          <span *ngIf="!tourService.isLastStep()">
+            {{ i18n.currentLang() === 'ru' ? 'Далее' : 'Келесі' }}
+          </span>
+          <app-icon name="arrow-right" [size]="13" *ngIf="!tourService.isLastStep()"></app-icon>
+
+          <app-icon name="check" [size]="14" *ngIf="tourService.isLastStep()"></app-icon>
+          <span *ngIf="tourService.isLastStep()">
+            {{ i18n.currentLang() === 'ru' ? 'Завершить онбординг 🎉' : 'Онбордингті аяқтау 🎉' }}
+          </span>
+        </button>
+      </div>
+    </div>
+  </div>
+</div>
