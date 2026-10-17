@@ -29,7 +29,16 @@ func (h *Handler) ListTeam(w http.ResponseWriter, r *http.Request) {
 	}
 
 	if c.Role == "employee" {
-		httputil.Error(w, http.StatusForbidden, "Доступ запрещен: сотрудники не могут просматривать список команды")
+		if c.DepartmentID == nil {
+			httputil.JSON(w, http.StatusOK, []interface{}{})
+			return
+		}
+		users, err := h.q.ListUsersByDepartment(r.Context(), c.DepartmentID)
+		if err != nil {
+			httputil.Error(w, http.StatusInternalServerError, "Ошибка загрузки списка коллег: "+err.Error())
+			return
+		}
+		httputil.JSON(w, http.StatusOK, users)
 		return
 	}
 
@@ -87,7 +96,7 @@ func (h *Handler) ListTasks(w http.ResponseWriter, r *http.Request) {
 	switch c.Role {
 	case "hr":
 		deptParam := r.URL.Query().Get("department_id")
-		if deptParam != "" {
+		if deptParam != "" && deptParam != "all" {
 			d, err := strconv.Atoi(deptParam)
 			if err == nil {
 				tasks, err := h.q.ListTasksByDepartment(r.Context(), d)
@@ -95,17 +104,24 @@ func (h *Handler) ListTasks(w http.ResponseWriter, r *http.Request) {
 					httputil.Error(w, http.StatusInternalServerError, err.Error())
 					return
 				}
+				if tasks == nil {
+					tasks = []db.ListTasksByDepartmentRow{}
+				}
 				httputil.JSON(w, http.StatusOK, tasks)
 				return
 			}
 		}
-		// Default to user tasks for HR
-		tasks, err := h.q.ListTasksByUser(r.Context(), c.UserID)
+		// HR sees all tasks across all departments by default
+		tasks, err := h.q.ListAllTasks(r.Context())
 		if err != nil {
 			httputil.Error(w, http.StatusInternalServerError, err.Error())
 			return
 		}
+		if tasks == nil {
+			tasks = []db.ListAllTasksRow{}
+		}
 		httputil.JSON(w, http.StatusOK, tasks)
+
 	case "manager":
 		if c.DepartmentID == nil {
 			httputil.Error(w, http.StatusBadRequest, "Руководитель не привязан к отделу")
@@ -116,12 +132,19 @@ func (h *Handler) ListTasks(w http.ResponseWriter, r *http.Request) {
 			httputil.Error(w, http.StatusInternalServerError, err.Error())
 			return
 		}
+		if tasks == nil {
+			tasks = []db.ListTasksByDepartmentRow{}
+		}
 		httputil.JSON(w, http.StatusOK, tasks)
-	default:
+
+	default: // employee
 		tasks, err := h.q.ListTasksByUser(r.Context(), c.UserID)
 		if err != nil {
 			httputil.Error(w, http.StatusInternalServerError, err.Error())
 			return
+		}
+		if tasks == nil {
+			tasks = []db.ListTasksByUserRow{}
 		}
 		httputil.JSON(w, http.StatusOK, tasks)
 	}
@@ -136,8 +159,8 @@ type CreateTaskInput struct {
 
 func (h *Handler) CreateTask(w http.ResponseWriter, r *http.Request) {
 	c := middleware.GetClaims(r.Context())
-	if c == nil || (c.Role != "manager" && c.Role != "hr") {
-		httputil.Error(w, http.StatusForbidden, "Доступ запрещен: только руководитель или HR могут назначать задания")
+	if c == nil {
+		httputil.Error(w, http.StatusUnauthorized, "Неавторизован")
 		return
 	}
 
@@ -148,9 +171,14 @@ func (h *Handler) CreateTask(w http.ResponseWriter, r *http.Request) {
 	}
 
 	input.Title = strings.TrimSpace(input.Title)
-	if input.Title == "" || input.AssigneeID <= 0 {
-		httputil.Error(w, http.StatusBadRequest, "Необходимо указать название задачи и исполнителя")
+	if input.Title == "" {
+		httputil.Error(w, http.StatusBadRequest, "Необходимо указать название задачи")
 		return
+	}
+
+	// Default assignee to self if not specified
+	if input.AssigneeID <= 0 {
+		input.AssigneeID = c.UserID
 	}
 
 	assignee, err := h.q.GetUser(r.Context(), input.AssigneeID)
@@ -166,6 +194,10 @@ func (h *Handler) CreateTask(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 		deptID = *c.DepartmentID
+	} else if c.Role == "employee" {
+		if c.DepartmentID != nil {
+			deptID = *c.DepartmentID
+		}
 	} else if assignee.DepartmentID != nil {
 		deptID = *assignee.DepartmentID
 	}

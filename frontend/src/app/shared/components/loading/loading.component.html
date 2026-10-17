@@ -1,0 +1,35 @@
+<!-- 1. Centered Spinner Loader -->
+<div *ngIf="type === 'spinner'" class="loading-container" [class.loading-sm]="size === 'sm'">
+  <div
+    class="spinner-green"
+    [class.spinner-sm]="size === 'sm'"
+    [class.spinner-lg]="size === 'lg'"
+  ></div>
+  <div class="loading-text" *ngIf="text">{{ text }}</div>
+</div>
+
+<!-- 2. Skeleton Table Rows Loader -->
+<div *ngIf="type === 'skeleton-table'" class="skeleton-table-wrapper">
+  <div class="skeleton-row" *ngFor="let _ of getRowArray()">
+    <div class="sk-avatar skeleton-box"></div>
+    <div class="sk-col-name">
+      <div class="sk-line-title skeleton-box"></div>
+      <div class="sk-line-sub skeleton-box"></div>
+    </div>
+    <div class="sk-col-iin skeleton-box"></div>
+    <div class="sk-col-badge skeleton-box"></div>
+    <div class="sk-col-badge skeleton-box"></div>
+    <div class="sk-col-date skeleton-box"></div>
+  </div>
+</div>
+
+<!-- 3. Skeleton Cards Loader -->
+<div *ngIf="type === 'skeleton-cards'" class="skeleton-cards-grid">
+  <div class="skeleton-card" *ngFor="let _ of [1, 2, 3, 4]">
+    <div class="sk-card-header">
+      <div class="sk-card-title skeleton-box"></div>
+      <div class="sk-card-icon skeleton-box"></div>
+    </div>
+    <div class="sk-card-val skeleton-box"></div>
+  </div>
+</div>

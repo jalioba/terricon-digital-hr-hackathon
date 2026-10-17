@@ -1,0 +1,119 @@
+<div class="login-page-wrapper">
+  <div class="login-card">
+    <!-- Header -->
+    <div class="login-header">
+      <img src="/JanaMen.svg" alt="JAŃA MEN" class="brand-logo-img" />
+      <h1 class="login-title">{{ i18n.t('app.login') }}</h1>
+      <p class="login-subtitle">{{ i18n.t('app.tagline') }}</p>
+    </div>
+
+    <!-- Error Alert -->
+    <div class="error-alert" *ngIf="errorMessage()">
+      <app-icon name="alert-triangle" [size]="16"></app-icon>
+      <span>{{ errorMessage() }}</span>
+    </div>
+
+    <!-- Login Form -->
+    <form (ngSubmit)="onSubmit()" #loginForm="ngForm">
+      <!-- IIN Field -->
+      <div class="form-group">
+        <label for="iin">{{ i18n.t('modal.iin_label') }}</label>
+        <div class="input-wrapper">
+          <span class="input-icon-left">
+            <app-icon name="user" [size]="16"></app-icon>
+          </span>
+          <input
+            id="iin"
+            type="text"
+            name="iin"
+            maxlength="12"
+            [(ngModel)]="iin"
+            placeholder="880101300555"
+            required
+            autocomplete="username"
+            [disabled]="isLoading()"
+          />
+        </div>
+      </div>
+
+      <!-- Password Field -->
+      <div class="form-group">
+        <label for="password">{{ i18n.t('modal.password_label') }}</label>
+        <div class="input-wrapper">
+          <span class="input-icon-left">
+            <app-icon name="shield" [size]="16"></app-icon>
+          </span>
+          <input
+            id="password"
+            [type]="showPassword() ? 'text' : 'password'"
+            name="password"
+            [(ngModel)]="password"
+            placeholder="••••••••••••"
+            required
+            autocomplete="current-password"
+            [disabled]="isLoading()"
+          />
+          <button
+            type="button"
+            class="input-icon-right"
+            (click)="togglePasswordVisibility()"
+            title="Показать / скрыть пароль"
+          >
+            <app-icon [name]="showPassword() ? 'eye-off' : 'eye'" [size]="16"></app-icon>
+          </button>
+        </div>
+      </div>
+
+      <!-- Submit Button -->
+      <button
+        type="submit"
+        class="submit-btn"
+        [disabled]="isLoading() || !iin || !password"
+      >
+        <span class="spinner" *ngIf="isLoading()"></span>
+        <span *ngIf="!isLoading()">{{ i18n.t('app.login') }}</span>
+        <span *ngIf="isLoading()">Авторизация в системе...</span>
+      </button>
+    </form>
+
+    <!-- Quick Demo Accounts for Testing (No emojis, clean corporate layout) -->
+    <div class="quick-test-section">
+      <div class="quick-title">Быстрый вход для проверки ролей:</div>
+      <div class="quick-buttons-grid">
+        <button
+          type="button"
+          class="quick-btn"
+          (click)="fillCredentials('880101300555', 'JanaMen2026!')"
+        >
+          <span class="quick-role">Сатпаева Айгерим (HR-директор — Управление персоналом)</span>
+          <span class="quick-iin">880101300555</span>
+        </button>
+
+        <button
+          type="button"
+          class="quick-btn"
+          (click)="fillCredentials('900101300111', 'JanaMen2026!')"
+        >
+          <span class="quick-role">Нурланов Ерлан (Руководитель отдела поставок)</span>
+          <span class="quick-iin">900101300111</span>
+        </button>
+
+        <button
+          type="button"
+          class="quick-btn"
+          (click)="fillCredentials('020101500222', 'JanaMen2026!')"
+        >
+          <span class="quick-role">Бекова Алия (Работник — Личный кабинет)</span>
+          <span class="quick-iin">020101500222</span>
+        </button>
+      </div>
+    </div>
+
+    <!-- Language Toggle Link -->
+    <div class="login-footer-lang">
+      <button type="button" class="lang-toggle-link" (click)="i18n.toggleLanguage()">
+        {{ i18n.currentLang() === 'ru' ? 'Қазақ тіліне ауысу' : 'Переключить на русский' }}
+      </button>
+    </div>
+  </div>
+</div>

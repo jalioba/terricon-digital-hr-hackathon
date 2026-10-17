@@ -1,21 +1,19 @@
 import { Routes } from '@angular/router';
-import { DashboardComponent } from './features/dashboard/dashboard.component';
-import { ProfileComponent } from './features/profile/profile.component';
-import { RequestsComponent } from './features/requests/requests.component';
-import { ApprovalsComponent } from './features/approvals/approvals.component';
-import { AcademyComponent } from './features/academy/academy.component';
-import { AiAssistantComponent } from './features/ai-assistant/ai-assistant.component';
-import { AdminComponent } from './features/admin/admin.component';
+import { LoginComponent } from './features/login/login.component';
+import { HrEmployeesComponent } from './features/hr-employees/hr-employees.component';
+import { TasksComponent } from './features/tasks/tasks.component';
+import { PlaceholderComponent } from './features/placeholder/placeholder.component';
 
 export const routes: Routes = [
-  { path: '', redirectTo: 'dashboard', pathMatch: 'full' },
-  { path: 'dashboard', component: DashboardComponent },
-  { path: 'profile', component: ProfileComponent },
-  { path: 'requests', component: RequestsComponent },
-  { path: 'approvals', component: ApprovalsComponent },
-  { path: 'academy', component: AcademyComponent },
-  { path: 'academy/:id', component: AcademyComponent },
-  { path: 'ai', component: AiAssistantComponent },
-  { path: 'admin', component: AdminComponent },
-  { path: '**', redirectTo: 'dashboard' }
+  { path: '', redirectTo: 'login', pathMatch: 'full' },
+  { path: 'login', component: LoginComponent },
+  { path: 'hr/employees', component: HrEmployeesComponent },
+  { path: 'tasks', component: TasksComponent },
+  { path: 'requests', component: PlaceholderComponent, data: { title: 'Заявки сотрудников', icon: 'file-text' } },
+  { path: 'team', component: PlaceholderComponent, data: { title: 'Моя команда', icon: 'users' } },
+  { path: 'academy', component: PlaceholderComponent, data: { title: 'Jana Academy', icon: 'book-open' } },
+  { path: 'ai', component: PlaceholderComponent, data: { title: 'Jana AI Ассистент', icon: 'bot' } },
+  { path: 'hr/analytics', component: PlaceholderComponent, data: { title: 'HR Аналитика', icon: 'bar-chart' } },
+  { path: 'profile', component: PlaceholderComponent, data: { title: 'Профиль сотрудника', icon: 'user' } },
+  { path: '**', redirectTo: 'login' }
 ];

@@ -1,0 +1,140 @@
+<header class="header-container" *ngIf="authService.isLoggedIn()">
+  <div class="header-capsule">
+    <!-- Brand Logo -->
+    <a routerLink="/" class="header-brand" title="JAŃA MEN — JanaPost HR">
+      <img src="/JanaMen.svg" alt="JAŃA MEN" class="brand-logo-img" />
+    </a>
+
+    <!-- Navigation Bar -->
+    <nav class="header-nav">
+      <!-- HR Manager Tabs -->
+      <ng-container *ngIf="authService.isHr()">
+        <a routerLink="/hr/employees" routerLinkActive="active" class="nav-link">
+          {{ i18n.t('nav.employees') }}
+        </a>
+        <a routerLink="/tasks" routerLinkActive="active" class="nav-link">
+          {{ i18n.t('nav.tasks') }}
+        </a>
+        <a routerLink="/requests" routerLinkActive="active" class="nav-link">
+          {{ i18n.t('nav.requests') }}
+        </a>
+        <a routerLink="/academy" routerLinkActive="active" class="nav-link">
+          {{ i18n.t('nav.academy') }}
+        </a>
+        <a routerLink="/ai" routerLinkActive="active" class="nav-link">
+          {{ i18n.t('nav.ai') }}
+        </a>
+        <a routerLink="/hr/analytics" routerLinkActive="active" class="nav-link">
+          {{ i18n.t('nav.analytics') }}
+        </a>
+      </ng-container>
+
+      <!-- Manager Tabs -->
+      <ng-container *ngIf="authService.isManager()">
+        <a routerLink="/hr/employees" routerLinkActive="active" class="nav-link">
+          {{ i18n.t('nav.employees') }}
+        </a>
+        <a routerLink="/tasks" routerLinkActive="active" class="nav-link">
+          {{ i18n.t('nav.tasks') }}
+        </a>
+        <a routerLink="/requests" routerLinkActive="active" class="nav-link">
+          {{ i18n.t('nav.requests') }}
+        </a>
+        <a routerLink="/team" routerLinkActive="active" class="nav-link">
+          {{ i18n.t('nav.team') }}
+        </a>
+        <a routerLink="/academy" routerLinkActive="active" class="nav-link">
+          {{ i18n.t('nav.academy') }}
+        </a>
+        <a routerLink="/ai" routerLinkActive="active" class="nav-link">
+          {{ i18n.t('nav.ai') }}
+        </a>
+      </ng-container>
+
+      <!-- Employee Tabs -->
+      <ng-container *ngIf="authService.isEmployee()">
+        <a routerLink="/tasks" routerLinkActive="active" class="nav-link">
+          {{ i18n.t('nav.tasks') }}
+        </a>
+        <a routerLink="/requests" routerLinkActive="active" class="nav-link">
+          {{ i18n.t('nav.requests') }}
+        </a>
+        <a routerLink="/academy" routerLinkActive="active" class="nav-link">
+          {{ i18n.t('nav.academy') }}
+        </a>
+        <a routerLink="/ai" routerLinkActive="active" class="nav-link">
+          {{ i18n.t('nav.ai') }}
+        </a>
+      </ng-container>
+    </nav>
+
+    <!-- Header Actions -->
+    <div class="header-actions">
+      <!-- Role indicator badge and user name -->
+      <div class="header-role-badge" *ngIf="authService.currentUser() as user">
+        <span class="badge badge-green" *ngIf="user.role === 'hr'">HR-директор</span>
+        <span class="badge badge-blue" *ngIf="user.role === 'manager'">Руководитель</span>
+        <span class="badge badge-amber" *ngIf="user.role === 'employee'">Работник</span>
+        <span class="header-user-name">{{ user.full_name }}</span>
+      </div>
+
+      <!-- Language Switcher Pill -->
+      <button
+        type="button"
+        class="lang-btn"
+        (click)="i18n.toggleLanguage()"
+        title="Сменить язык (RU/KZ)"
+      >
+        {{ i18n.currentLang() === 'ru' ? 'RU' : 'KZ' }}
+      </button>
+
+      <!-- Mail / Notifications Envelope Button -->
+      <button
+        type="button"
+        class="action-icon-btn"
+        (click)="toggleNotifications()"
+        title="Уведомления и почта"
+      >
+        <app-icon name="mail" [size]="19"></app-icon>
+        <span class="badge-dot" *ngIf="unreadCount() > 0"></span>
+      </button>
+
+      <!-- User Profile Avatar & Dropdown -->
+      <div class="profile-dropdown-wrapper">
+        <button
+          type="button"
+          class="user-avatar-btn"
+          [class.active]="isProfileMenuOpen()"
+          (click)="toggleProfileMenu()"
+          title="Профиль сотрудника"
+        >
+          <app-icon name="user" [size]="20"></app-icon>
+        </button>
+
+        <!-- Dropdown Menu -->
+        <div class="profile-dropdown" *ngIf="isProfileMenuOpen()">
+          <div class="dropdown-user-info" *ngIf="authService.currentUser() as user">
+            <div class="user-fullname">{{ user.full_name }}</div>
+            <div class="user-iin">ИИН: {{ user.iin }}</div>
+            <div class="user-meta-tags">
+              <span class="badge badge-green" *ngIf="user.role === 'hr'">HR-директор</span>
+              <span class="badge badge-blue" *ngIf="user.role === 'manager'">Руководитель</span>
+              <span class="badge badge-amber" *ngIf="user.role === 'employee'">Сотрудник</span>
+              <span class="badge" *ngIf="user.dept_ru">{{ user.dept_ru }}</span>
+            </div>
+          </div>
+
+          <button type="button" class="dropdown-item" (click)="openProfile()">
+            <app-icon name="user" [size]="16"></app-icon>
+            <span>Мой профиль</span>
+          </button>
+
+          <button type="button" class="dropdown-item text-danger" (click)="logout()">
+            <app-icon name="log-out" [size]="16"></app-icon>
+            <span>{{ i18n.t('app.logout') }}</span>
+          </button>
+        </div>
+      </div>
+    </div>
+  </div>
+</header>

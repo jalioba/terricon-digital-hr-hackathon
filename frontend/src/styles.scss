@@ -1,54 +1,43 @@
-/* JanaPost / JanaMen Corporate Design System */
-@import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&family=Outfit:wght@500;600;700;800&display=swap');
+/* JanaPost / JanaMen Corporate Design System - Refined Enterprise B2B */
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Outfit:wght@500;600;700&display=swap');
 
 :root {
   /* JanaPost Brand Colors */
-  --primary-50: #f0fdf4;
-  --primary-100: #dcfce7;
-  --primary-200: #bbf7d0;
-  --primary-300: #86efac;
-  --primary-400: #4ade80;
-  --primary-500: #22c55e;
-  --primary-600: #16a34a;
-  --primary-700: #15803d;
-  --primary-800: #166534;
-  --primary-900: #14532d;
   --janapost-green: #00A859;
-  --janapost-dark: #007A3D;
-  --janapost-light: #E8F8F0;
+  --janapost-green-hover: #008f4c;
+  --janapost-green-light: #EBF7F0;
+  --janapost-dark: #0F172A;
 
-  /* Neutrals */
-  --bg-page: #F4FBF7;
+  /* Neutrals - Clean, modern, crisp */
+  --bg-page: #F8FAFC;
   --bg-surface: #FFFFFF;
-  --bg-surface-subtle: #F8FAF9;
+  --bg-surface-subtle: #F1F5F9;
   --border-light: #E2E8F0;
-  --border-primary: #C6EED8;
+  --border-focus: #00A859;
 
   /* Typography */
   --text-main: #0F172A;
+  --text-secondary: #475569;
   --text-muted: #64748B;
   --text-subtle: #94A3B8;
 
-  /* Accents */
-  --accent-amber: #F59E0B;
-  --accent-amber-light: #FEF3C7;
+  /* Accents - Solid & subtle */
+  --accent-amber: #D97706;
+  --accent-amber-bg: #FEF3C7;
   --accent-blue: #0284C7;
-  --accent-blue-light: #E0F2FE;
-  --accent-rose: #E11D48;
-  --accent-rose-light: #FFE4E6;
+  --accent-blue-bg: #E0F2FE;
+  --accent-rose: #DC2626;
+  --accent-rose-bg: #FEE2E2;
 
-  /* Shadows */
-  --shadow-sm: 0 1px 2px 0 rgba(0, 0, 0, 0.05);
-  --shadow-md: 0 4px 6px -1px rgba(0, 0, 0, 0.07), 0 2px 4px -1px rgba(0, 0, 0, 0.04);
-  --shadow-lg: 0 10px 15px -3px rgba(0, 0, 0, 0.08), 0 4px 6px -2px rgba(0, 0, 0, 0.03);
-  --shadow-glow: 0 4px 20px rgba(0, 168, 89, 0.18);
-
-  /* Radius */
+  /* Radius - Professional, disciplined corners */
+  --radius-xs: 4px;
   --radius-sm: 6px;
-  --radius-md: 10px;
-  --radius-lg: 16px;
-  --radius-xl: 22px;
-  --radius-full: 9999px;
+  --radius-md: 8px;
+  --radius-lg: 12px;
+
+  /* Shadows - Minimalist, single-layer subtle elevation */
+  --shadow-subtle: 0 1px 3px 0 rgba(0, 0, 0, 0.05);
+  --shadow-card: 0 1px 3px 0 rgba(0, 0, 0, 0.04), 0 1px 2px -1px rgba(0, 0, 0, 0.03);
 }
 
 * {
@@ -67,7 +56,8 @@ body {
 
 h1, h2, h3, h4, .brand-title {
   font-family: 'Outfit', 'Inter', sans-serif;
-  letter-spacing: -0.02em;
+  letter-spacing: -0.015em;
+  color: var(--text-main);
 }
 
 button {
@@ -75,101 +65,139 @@ button {
   cursor: pointer;
   border: none;
   background: none;
-  transition: all 0.2s ease-in-out;
+  transition: background-color 0.15s ease, border-color 0.15s ease, color 0.15s ease;
 }
 
 input, select, textarea {
   font-family: inherit;
+  color: var(--text-main);
 }
 
-/* Common UI Utilities */
+/* Primary Corporate Action Button */
 .btn-primary {
-  background: linear-gradient(135deg, var(--janapost-green) 0%, var(--janapost-dark) 100%);
-  color: white;
-  padding: 10px 18px;
+  background-color: var(--janapost-green);
+  color: #ffffff;
+  padding: 9px 18px;
   border-radius: var(--radius-md);
+  font-size: 14px;
   font-weight: 600;
   display: inline-flex;
   align-items: center;
+  justify-content: center;
   gap: 8px;
-  box-shadow: 0 2px 8px rgba(0, 168, 89, 0.25);
-  transition: all 0.2s ease;
-  &:hover {
-    transform: translateY(-1px);
-    box-shadow: 0 4px 12px rgba(0, 168, 89, 0.35);
+  border: 1px solid transparent;
+  transition: background-color 0.15s ease;
+
+  &:hover:not(:disabled) {
+    background-color: var(--janapost-green-hover);
   }
-  &:active {
-    transform: translateY(0);
+
+  &:disabled {
+    opacity: 0.55;
+    cursor: not-allowed;
   }
 }
 
+/* Secondary Button */
 .btn-secondary {
-  background: white;
+  background-color: #ffffff;
   color: var(--text-main);
   border: 1px solid var(--border-light);
-  padding: 9px 16px;
+  padding: 8px 16px;
   border-radius: var(--radius-md);
+  font-size: 14px;
   font-weight: 500;
   display: inline-flex;
   align-items: center;
+  justify-content: center;
   gap: 8px;
+  transition: background-color 0.15s ease, border-color 0.15s ease;
+
   &:hover {
-    background: var(--bg-surface-subtle);
-    border-color: var(--janapost-green);
-    color: var(--janapost-dark);
+    background-color: var(--bg-surface-subtle);
+    border-color: #cbd5e1;
   }
 }
 
+/* Card Surface */
 .card {
   background: var(--bg-surface);
   border: 1px solid var(--border-light);
   border-radius: var(--radius-lg);
   padding: 24px;
-  box-shadow: var(--shadow-sm);
-  transition: box-shadow 0.2s ease;
-  &:hover {
-    box-shadow: var(--shadow-md);
-  }
+  box-shadow: var(--shadow-card);
 }
 
+/* Crisp Clean Badges */
 .badge {
   display: inline-flex;
   align-items: center;
-  gap: 5px;
-  font-size: 0.75rem;
-  font-weight: 600;
-  padding: 3px 9px;
-  border-radius: var(--radius-full);
-  text-transform: uppercase;
-  letter-spacing: 0.03em;
+  font-size: 12px;
+  font-weight: 500;
+  padding: 2px 8px;
+  border-radius: var(--radius-xs);
+  line-height: 1.4;
 }
 
 .badge-green {
-  background-color: var(--primary-100);
-  color: var(--primary-800);
+  background-color: var(--janapost-green-light);
+  color: #065f46;
+  border: 1px solid #a7f3d0;
 }
 
 .badge-amber {
-  background-color: var(--accent-amber-light);
+  background-color: var(--accent-amber-bg);
   color: #92400e;
+  border: 1px solid #fde68a;
 }
 
 .badge-blue {
-  background-color: var(--accent-blue-light);
-  color: #0369a1;
+  background-color: var(--accent-blue-bg);
+  color: #075985;
+  border: 1px solid #bae6fd;
 }
 
 .badge-rose {
-  background-color: var(--accent-rose-light);
-  color: #9f1239;
+  background-color: var(--accent-rose-bg);
+  color: #991b1b;
+  border: 1px solid #fecaca;
 }
 
-/* Animations */
-@keyframes fadeIn {
-  from { opacity: 0; transform: translateY(6px); }
-  to { opacity: 1; transform: translateY(0); }
+/* Loading Spinners & Skeletons */
+.spinner-green {
+  width: 22px;
+  height: 22px;
+  border: 2.5px solid #e2e8f0;
+  border-top-color: #00a859;
+  border-radius: 50%;
+  animation: spin 0.7s linear infinite;
+  display: inline-block;
 }
 
-.fade-in {
-  animation: fadeIn 0.25s cubic-bezier(0.16, 1, 0.3, 1) forwards;
+.spinner-sm {
+  width: 16px;
+  height: 16px;
+  border-width: 2px;
 }
+
+.spinner-lg {
+  width: 32px;
+  height: 32px;
+  border-width: 3px;
+}
+
+@keyframes spin {
+  to { transform: rotate(360deg); }
+}
+
+@keyframes pulseSkeleton {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.45; }
+}
+
+.skeleton-box {
+  background-color: #f1f5f9;
+  border-radius: 6px;
+  animation: pulseSkeleton 1.4s ease-in-out infinite;
+}
+

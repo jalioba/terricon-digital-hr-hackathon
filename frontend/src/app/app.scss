@@ -1,11 +1,13 @@
-.app-layout {
-  display: flex;
-  min-height: calc(100vh - 72px);
-  background: var(--bg-page);
+.content-authenticated {
+  max-width: 1280px;
+  margin: 0 auto;
+  padding: 24px 16px 48px;
+  animation: fadeIn 0.2s ease-out;
 }
 
-.app-main {
-  flex: 1;
-  overflow-y: auto;
-  min-width: 0;
+.content-public {
+  min-height: 100vh;
+  display: flex;
+  align-items: center;
+  justify-content: center;
 }

@@ -115,18 +115,29 @@ INSERT INTO tasks (title, description, department_id, created_by, assigned_to, d
 VALUES ($1, $2, $3, $4, $5, $6, $7)
 RETURNING *;
 
--- name: ListTasksByUser :many
-SELECT t.*, u.full_name AS creator_name
-FROM tasks t
-JOIN users u ON u.id = t.created_by
-WHERE t.assigned_to = $1
-ORDER BY t.due_date NULLS LAST, t.id DESC;
-
--- name: ListTasksByDepartment :many
-SELECT t.*, creator.full_name AS creator_name, assignee.full_name AS assignee_name
+-- name: ListAllTasks :many
+SELECT t.*, creator.full_name AS creator_name, assignee.full_name AS assignee_name, d.name_ru AS dept_name_ru, d.code AS dept_code
 FROM tasks t
 JOIN users creator ON creator.id = t.created_by
 JOIN users assignee ON assignee.id = t.assigned_to
+JOIN departments d ON d.id = t.department_id
+ORDER BY t.due_date NULLS LAST, t.id DESC;
+
+-- name: ListTasksByUser :many
+SELECT t.*, creator.full_name AS creator_name, assignee.full_name AS assignee_name, d.name_ru AS dept_name_ru, d.code AS dept_code
+FROM tasks t
+JOIN users creator ON creator.id = t.created_by
+JOIN users assignee ON assignee.id = t.assigned_to
+JOIN departments d ON d.id = t.department_id
+WHERE t.assigned_to = $1 OR t.created_by = $1
+ORDER BY t.due_date NULLS LAST, t.id DESC;
+
+-- name: ListTasksByDepartment :many
+SELECT t.*, creator.full_name AS creator_name, assignee.full_name AS assignee_name, d.name_ru AS dept_name_ru, d.code AS dept_code
+FROM tasks t
+JOIN users creator ON creator.id = t.created_by
+JOIN users assignee ON assignee.id = t.assigned_to
+JOIN departments d ON d.id = t.department_id
 WHERE t.department_id = $1
 ORDER BY t.due_date NULLS LAST, t.id DESC;
 

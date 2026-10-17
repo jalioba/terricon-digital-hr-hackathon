@@ -65,6 +65,19 @@ func doJSON(t *testing.T, handler http.Handler, method, path, token string, body
 	return res, resData
 }
 
+func doJSONArray(t *testing.T, handler http.Handler, method, path, token string) (*http.Response, []map[string]interface{}) {
+	req := httptest.NewRequest(method, path, nil)
+	if token != "" {
+		req.Header.Set("Authorization", "Bearer "+token)
+	}
+	rec := httptest.NewRecorder()
+	handler.ServeHTTP(rec, req)
+	res := rec.Result()
+	var resData []map[string]interface{}
+	_ = json.NewDecoder(res.Body).Decode(&resData)
+	return res, resData
+}
+
 func TestE2E_FullFlow(t *testing.T) {
 	handler, _ := setupTestApp(t)
 
@@ -290,7 +303,7 @@ func TestE2E_RBAC_DepartmentIsolation(t *testing.T) {
 	// 5. Employee tries to view /api/hr/employees or /api/requests/department
 	_, empData := doJSON(t, handler, "POST", "/api/auth/login", "", map[string]string{
 		"iin":      "020101500222",
-		"password": "employeePass123",
+		"password": "JanaMen2026!",
 	})
 	empToken := empData["token"].(string)
 
@@ -302,6 +315,21 @@ func TestE2E_RBAC_DepartmentIsolation(t *testing.T) {
 	res, _ = doJSON(t, handler, "GET", "/api/hr/employees", empToken, nil)
 	if res.StatusCode != http.StatusForbidden {
 		t.Fatalf("expected 403 Forbidden for employee accessing HR employee list, got %d", res.StatusCode)
+	}
+
+	// 6. Logistics Manager views /api/hr/employees - MUST ONLY return employees of department 2
+	res, empList := doJSONArray(t, handler, "GET", "/api/hr/employees", logisticsMgrToken)
+	if res.StatusCode != http.StatusOK {
+		t.Fatalf("expected 200 OK for manager accessing /api/hr/employees, got %d", res.StatusCode)
+	}
+	if len(empList) == 0 {
+		t.Fatalf("expected department employees for manager, got empty list")
+	}
+	for _, emp := range empList {
+		deptID := int(emp["department_id"].(float64))
+		if deptID != 2 {
+			t.Fatalf("SECURITY VIOLATION: Manager of Department 2 saw employee from department %d! Employee: %+v", deptID, emp)
+		}
 	}
 }
 

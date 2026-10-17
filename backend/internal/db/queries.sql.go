@@ -762,6 +762,67 @@ func (q *Queries) ListAllRequests(ctx context.Context) ([]ListAllRequestsRow, er
 	return items, nil
 }
 
+const listAllTasks = `-- name: ListAllTasks :many
+SELECT t.id, t.title, t.description, t.department_id, t.created_by, t.assigned_to, t.due_date, t.status, t.created_at, t.updated_at, creator.full_name AS creator_name, assignee.full_name AS assignee_name, d.name_ru AS dept_name_ru, d.code AS dept_code
+FROM tasks t
+JOIN users creator ON creator.id = t.created_by
+JOIN users assignee ON assignee.id = t.assigned_to
+JOIN departments d ON d.id = t.department_id
+ORDER BY t.due_date NULLS LAST, t.id DESC
+`
+
+type ListAllTasksRow struct {
+	ID           int        `json:"id"`
+	Title        string     `json:"title"`
+	Description  string     `json:"description"`
+	DepartmentID int        `json:"department_id"`
+	CreatedBy    int        `json:"created_by"`
+	AssignedTo   int        `json:"assigned_to"`
+	DueDate      *time.Time `json:"due_date"`
+	Status       string     `json:"status"`
+	CreatedAt    time.Time  `json:"created_at"`
+	UpdatedAt    time.Time  `json:"updated_at"`
+	CreatorName  string     `json:"creator_name"`
+	AssigneeName string     `json:"assignee_name"`
+	DeptNameRu   string     `json:"dept_name_ru"`
+	DeptCode     string     `json:"dept_code"`
+}
+
+func (q *Queries) ListAllTasks(ctx context.Context) ([]ListAllTasksRow, error) {
+	rows, err := q.db.Query(ctx, listAllTasks)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []ListAllTasksRow
+	for rows.Next() {
+		var i ListAllTasksRow
+		if err := rows.Scan(
+			&i.ID,
+			&i.Title,
+			&i.Description,
+			&i.DepartmentID,
+			&i.CreatedBy,
+			&i.AssignedTo,
+			&i.DueDate,
+			&i.Status,
+			&i.CreatedAt,
+			&i.UpdatedAt,
+			&i.CreatorName,
+			&i.AssigneeName,
+			&i.DeptNameRu,
+			&i.DeptCode,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
 const listAllUsers = `-- name: ListAllUsers :many
 SELECT u.id, u.iin, u.full_name, u.role, u.department_id, u.company, u.position,
        u.hired_at, u.vacation_days_left, u.created_at,
@@ -1331,10 +1392,11 @@ func (q *Queries) ListRequestsByUser(ctx context.Context, userID int) ([]ListReq
 }
 
 const listTasksByDepartment = `-- name: ListTasksByDepartment :many
-SELECT t.id, t.title, t.description, t.department_id, t.created_by, t.assigned_to, t.due_date, t.status, t.created_at, t.updated_at, creator.full_name AS creator_name, assignee.full_name AS assignee_name
+SELECT t.id, t.title, t.description, t.department_id, t.created_by, t.assigned_to, t.due_date, t.status, t.created_at, t.updated_at, creator.full_name AS creator_name, assignee.full_name AS assignee_name, d.name_ru AS dept_name_ru, d.code AS dept_code
 FROM tasks t
 JOIN users creator ON creator.id = t.created_by
 JOIN users assignee ON assignee.id = t.assigned_to
+JOIN departments d ON d.id = t.department_id
 WHERE t.department_id = $1
 ORDER BY t.due_date NULLS LAST, t.id DESC
 `
@@ -1352,6 +1414,8 @@ type ListTasksByDepartmentRow struct {
 	UpdatedAt    time.Time  `json:"updated_at"`
 	CreatorName  string     `json:"creator_name"`
 	AssigneeName string     `json:"assignee_name"`
+	DeptNameRu   string     `json:"dept_name_ru"`
+	DeptCode     string     `json:"dept_code"`
 }
 
 func (q *Queries) ListTasksByDepartment(ctx context.Context, departmentID int) ([]ListTasksByDepartmentRow, error) {
@@ -1376,6 +1440,8 @@ func (q *Queries) ListTasksByDepartment(ctx context.Context, departmentID int) (
 			&i.UpdatedAt,
 			&i.CreatorName,
 			&i.AssigneeName,
+			&i.DeptNameRu,
+			&i.DeptCode,
 		); err != nil {
 			return nil, err
 		}
@@ -1388,10 +1454,12 @@ func (q *Queries) ListTasksByDepartment(ctx context.Context, departmentID int) (
 }
 
 const listTasksByUser = `-- name: ListTasksByUser :many
-SELECT t.id, t.title, t.description, t.department_id, t.created_by, t.assigned_to, t.due_date, t.status, t.created_at, t.updated_at, u.full_name AS creator_name
+SELECT t.id, t.title, t.description, t.department_id, t.created_by, t.assigned_to, t.due_date, t.status, t.created_at, t.updated_at, creator.full_name AS creator_name, assignee.full_name AS assignee_name, d.name_ru AS dept_name_ru, d.code AS dept_code
 FROM tasks t
-JOIN users u ON u.id = t.created_by
-WHERE t.assigned_to = $1
+JOIN users creator ON creator.id = t.created_by
+JOIN users assignee ON assignee.id = t.assigned_to
+JOIN departments d ON d.id = t.department_id
+WHERE t.assigned_to = $1 OR t.created_by = $1
 ORDER BY t.due_date NULLS LAST, t.id DESC
 `
 
@@ -1407,6 +1475,9 @@ type ListTasksByUserRow struct {
 	CreatedAt    time.Time  `json:"created_at"`
 	UpdatedAt    time.Time  `json:"updated_at"`
 	CreatorName  string     `json:"creator_name"`
+	AssigneeName string     `json:"assignee_name"`
+	DeptNameRu   string     `json:"dept_name_ru"`
+	DeptCode     string     `json:"dept_code"`
 }
 
 func (q *Queries) ListTasksByUser(ctx context.Context, assignedTo int) ([]ListTasksByUserRow, error) {
@@ -1430,6 +1501,9 @@ func (q *Queries) ListTasksByUser(ctx context.Context, assignedTo int) ([]ListTa
 			&i.CreatedAt,
 			&i.UpdatedAt,
 			&i.CreatorName,
+			&i.AssigneeName,
+			&i.DeptNameRu,
+			&i.DeptCode,
 		); err != nil {
 			return nil, err
 		}

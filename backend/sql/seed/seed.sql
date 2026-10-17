@@ -11,7 +11,7 @@ INSERT INTO users (iin, password_hash, full_name, role, department_id, company, 
 VALUES (
   '880101300555',
   '$2a$10$xHigmow1g4q5gQEGHI1toOWZeII0FAQYaNw8YRooyAWXX71tEqFLO',
-  'Айгерим Сатпаева',
+  'Сатпаева Айгерим Сериковна',
   'hr',
   NULL,
   'JanaPost',

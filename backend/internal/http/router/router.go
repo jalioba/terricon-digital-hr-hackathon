@@ -103,9 +103,9 @@ func NewRouter(cfg config.Config, q *db.Queries, zup zup1c.Client, doc documento
 			// Analytics
 			p.Get("/analytics", analyH.GetAnalytics)
 
-			// HR Management endpoints (restricted to role 'hr')
+			// HR Management endpoints (restricted to 'hr' and 'manager')
 			p.Group(func(hrGroup chi.Router) {
-				hrGroup.Use(middleware.RequireRole("hr"))
+				hrGroup.Use(middleware.RequireRole("hr", "manager"))
 				hrGroup.Post("/hr/employees", hrH.CreateEmployee)
 				hrGroup.Get("/hr/employees", hrH.ListEmployees)
 				hrGroup.Get("/hr/analytics", hrH.GetAnalytics)

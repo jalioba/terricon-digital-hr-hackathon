@@ -21,6 +21,7 @@
     "@angular/router": "^22.2.0",
     "@angular/ssr": "^22.2.2",
     "express": "^5.1.0",
+    "lucide-angular": "^1.0.0",
     "rxjs": "~7.8.0",
     "thesvg": "^3.4.0",
     "tslib": "^2.3.0"

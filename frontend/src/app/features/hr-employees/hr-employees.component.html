@@ -1,0 +1,430 @@
+<div class="hr-page">
+  <!-- Page Header -->
+  <div class="page-header">
+    <div class="header-titles">
+      <h1 class="page-title">{{ i18n.t('hr.title') }}</h1>
+      <p class="page-subtitle">{{ i18n.t('hr.subtitle') }}</p>
+    </div>
+
+    <div class="header-actions-group">
+      <button type="button" class="btn-refresh" (click)="refreshEmployees()" [disabled]="isLoading()" title="Обновить список из базы">
+        <span class="spinner-green spinner-sm" *ngIf="isLoading()"></span>
+        <app-icon name="clock" [size]="15" *ngIf="!isLoading()"></app-icon>
+        <span>{{ isLoading() ? 'Загрузка...' : 'Обновить' }}</span>
+      </button>
+
+      <button type="button" class="btn-add-employee" *ngIf="!authService.isEmployee()" (click)="openAddModal()">
+        <app-icon name="plus" [size]="16"></app-icon>
+        <span>{{ i18n.t('hr.add_employee') }}</span>
+      </button>
+    </div>
+  </div>
+
+  <!-- Employee Read-Only Warning Banner -->
+  <div class="employee-access-notice" *ngIf="authService.isEmployee()">
+    <app-icon name="alert-triangle" [size]="18"></app-icon>
+    <span>
+      Вы авторизованы как <strong>Работник ({{ authService.currentUser()?.full_name }})</strong>.
+      В этой роли доступен режим просмотра. Добавление и создание сотрудников доступно только для <strong>HR-директора</strong> (ИИН 880101300555) и <strong>Руководителей отделов</strong>.
+    </span>
+  </div>
+
+  <!-- Success Notification on Employee Creation with Chosen Credentials -->
+  <div class="credentials-alert" *ngIf="createdCredentials() as cred">
+    <div class="cred-info">
+      <div class="cred-title">Сотрудник {{ cred.name }} успешно добавлен в систему!</div>
+      <div class="cred-text">
+        Передайте данные для первого входа сотруднику:
+        ИИН: <strong>{{ cred.iin }}</strong> | Пароль: <strong>{{ cred.pass }}</strong>
+      </div>
+    </div>
+    <button type="button" class="btn-close-cred" (click)="dismissCredentialsAlert()" title="Закрыть">
+      <app-icon name="x" [size]="16"></app-icon>
+    </button>
+  </div>
+
+  <!-- KPI Statistics Cards (Clean Flat Enterprise) -->
+  <div class="stats-grid">
+    <!-- HR View: Company-wide metrics -->
+    <ng-container *ngIf="authService.isHr()">
+      <div class="stat-card">
+        <div class="stat-header">
+          <span class="stat-label">{{ i18n.t('hr.total_employees') }}</span>
+          <span class="stat-icon"><app-icon name="users" [size]="18"></app-icon></span>
+        </div>
+        <div class="stat-value">
+          <span *ngIf="!isLoading()">{{ totalCount() }}</span>
+          <span *ngIf="isLoading()" class="stat-val-skel skeleton-box"></span>
+        </div>
+      </div>
+
+      <div class="stat-card">
+        <div class="stat-header">
+          <span class="stat-label">{{ i18n.t('hr.supply_dept') }}</span>
+          <span class="stat-icon"><app-icon name="check-circle" [size]="18"></app-icon></span>
+        </div>
+        <div class="stat-value">
+          <span *ngIf="!isLoading()">{{ supplyCount() }}</span>
+          <span *ngIf="isLoading()" class="stat-val-skel skeleton-box"></span>
+        </div>
+      </div>
+
+      <div class="stat-card">
+        <div class="stat-header">
+          <span class="stat-label">{{ i18n.t('hr.logistics_dept') }}</span>
+          <span class="stat-icon"><app-icon name="clock" [size]="18"></app-icon></span>
+        </div>
+        <div class="stat-value">
+          <span *ngIf="!isLoading()">{{ logisticsCount() }}</span>
+          <span *ngIf="isLoading()" class="stat-val-skel skeleton-box"></span>
+        </div>
+      </div>
+
+      <div class="stat-card">
+        <div class="stat-header">
+          <span class="stat-label">{{ i18n.t('hr.it_dept') }}</span>
+          <span class="stat-icon"><app-icon name="shield" [size]="18"></app-icon></span>
+        </div>
+        <div class="stat-value">
+          <span *ngIf="!isLoading()">{{ itCount() }}</span>
+          <span *ngIf="isLoading()" class="stat-val-skel skeleton-box"></span>
+        </div>
+      </div>
+    </ng-container>
+
+    <!-- Manager View: Department-focused metrics -->
+    <ng-container *ngIf="!authService.isHr()">
+      <div class="stat-card">
+        <div class="stat-header">
+          <span class="stat-label">Всего в моем отделе</span>
+          <span class="stat-icon"><app-icon name="users" [size]="18"></app-icon></span>
+        </div>
+        <div class="stat-value">
+          <span *ngIf="!isLoading()">{{ totalCount() }}</span>
+          <span *ngIf="isLoading()" class="stat-val-skel skeleton-box"></span>
+        </div>
+      </div>
+
+      <div class="stat-card">
+        <div class="stat-header">
+          <span class="stat-label">Руководители отдела</span>
+          <span class="stat-icon"><app-icon name="shield" [size]="18"></app-icon></span>
+        </div>
+        <div class="stat-value">
+          <span *ngIf="!isLoading()">{{ deptManagersCount() }}</span>
+          <span *ngIf="isLoading()" class="stat-val-skel skeleton-box"></span>
+        </div>
+      </div>
+
+      <div class="stat-card">
+        <div class="stat-header">
+          <span class="stat-label">Специалисты и работники</span>
+          <span class="stat-icon"><app-icon name="check-circle" [size]="18"></app-icon></span>
+        </div>
+        <div class="stat-value">
+          <span *ngIf="!isLoading()">{{ deptEmployeesCount() }}</span>
+          <span *ngIf="isLoading()" class="stat-val-skel skeleton-box"></span>
+        </div>
+      </div>
+
+      <div class="stat-card">
+        <div class="stat-header">
+          <span class="stat-label">Подразделение</span>
+          <span class="stat-icon"><app-icon name="clock" [size]="18"></app-icon></span>
+        </div>
+        <div class="stat-value stat-value-sm">
+          <span>{{ managerDepartmentName() }}</span>
+        </div>
+      </div>
+    </ng-container>
+  </div>
+
+  <!-- Filter & Search Controls (Reactive Signals) -->
+  <div class="controls-card">
+    <div class="search-wrapper">
+      <span class="search-icon">
+        <app-icon name="search" [size]="16"></app-icon>
+      </span>
+      <input
+        type="text"
+        [ngModel]="searchQuery()"
+        (ngModelChange)="searchQuery.set($event)"
+        [placeholder]="i18n.t('hr.search_placeholder')"
+      />
+    </div>
+
+    <div class="filters-group">
+      <!-- Department Filter (for HR) -->
+      <select *ngIf="authService.isHr()" [ngModel]="selectedDept()" (ngModelChange)="selectedDept.set($event)">
+        <option value="all">{{ i18n.t('hr.filter_all_departments') }}</option>
+        <option *ngFor="let dept of departments()" [value]="dept.id">
+          {{ i18n.currentLang() === 'ru' ? dept.name_ru : dept.name_kz }}
+        </option>
+      </select>
+
+      <!-- Department Locked Indicator (for Manager) -->
+      <div *ngIf="!authService.isHr()" class="manager-dept-pill">
+        <app-icon name="shield" [size]="14"></app-icon>
+        <span>Отдел: {{ managerDepartmentName() }}</span>
+      </div>
+
+      <!-- Role Filter -->
+      <select [ngModel]="selectedRole()" (ngModelChange)="selectedRole.set($event)">
+        <option value="all">{{ i18n.t('hr.filter_all_roles') }}</option>
+        <option value="employee">{{ i18n.t('role.employee') }}</option>
+        <option value="manager">{{ i18n.t('role.manager') }}</option>
+        <option value="hr" *ngIf="authService.isHr()">{{ i18n.t('role.hr') }}</option>
+      </select>
+    </div>
+  </div>
+
+  <!-- Employees Data Table -->
+  <div class="table-card">
+    <!-- Loading Skeleton Table State -->
+    <app-loading
+      type="skeleton-table"
+      [rows]="5"
+      text="Загрузка списка сотрудников из базы данных..."
+      *ngIf="isLoading()"
+    ></app-loading>
+
+    <div class="table-responsive" *ngIf="!isLoading()">
+      <table class="employee-table">
+        <thead>
+          <tr>
+            <th>{{ i18n.t('hr.col_name') }}</th>
+            <th>{{ i18n.t('hr.col_iin') }}</th>
+            <th>{{ i18n.t('hr.col_dept') }}</th>
+            <th>{{ i18n.t('hr.col_role') }}</th>
+            <th>{{ i18n.t('hr.col_vacation') }}</th>
+            <th>{{ i18n.t('hr.col_date') }}</th>
+          </tr>
+        </thead>
+        <tbody *ngIf="filteredEmployees().length > 0">
+          <tr *ngFor="let emp of filteredEmployees()">
+            <!-- Full Name (ФИО) & Position -->
+            <td>
+              <div class="user-cell">
+                <div class="user-avatar-box">
+                  {{ getInitials(emp.full_name) }}
+                </div>
+                <div class="user-text">
+                  <div class="user-name">{{ emp.full_name }}</div>
+                  <div class="user-position">{{ emp.position }}</div>
+                </div>
+              </div>
+            </td>
+
+            <!-- IIN -->
+            <td>
+              <span class="iin-code">{{ emp.iin }}</span>
+            </td>
+
+            <!-- Department -->
+            <td>
+              <span
+                class="dept-badge"
+                [class.dept-supply]="emp.dept_code === 'supply'"
+                [class.dept-logistics]="emp.dept_code === 'logistics'"
+                [class.dept-it]="emp.dept_code === 'it_support'"
+              >
+                {{ i18n.currentLang() === 'ru' ? (emp.dept_ru || 'Без отдела') : (emp.dept_kz || 'Бөлімсіз') }}
+              </span>
+            </td>
+
+            <!-- Role -->
+            <td>
+              <span class="badge badge-green" *ngIf="emp.role === 'hr'">HR-директор</span>
+              <span class="badge badge-blue" *ngIf="emp.role === 'manager'">Руководитель</span>
+              <span class="badge badge-amber" *ngIf="emp.role === 'employee'">Работник</span>
+            </td>
+
+            <!-- Vacation Balance -->
+            <td>
+              <span class="vacation-pill">
+                {{ emp.vacation_days_left }} дн.
+              </span>
+            </td>
+
+            <!-- Date Hired -->
+            <td>
+              <span class="text-sm text-gray-500">
+                {{ emp.hired_at | date:'dd.MM.yyyy' }}
+              </span>
+            </td>
+          </tr>
+        </tbody>
+      </table>
+    </div>
+
+    <!-- Empty Table State -->
+    <div class="empty-table-state" *ngIf="filteredEmployees().length === 0 && !isLoading()">
+      <div class="empty-icon">
+        <app-icon name="users" [size]="24"></app-icon>
+      </div>
+      <div class="empty-title">Сотрудники не найдены</div>
+      <div class="empty-desc">Попробуйте изменить поисковый запрос или фильтры отделов/ролей</div>
+    </div>
+  </div>
+
+  <!-- Modal Dialog: Add Employee -->
+  <div class="modal-backdrop" *ngIf="isModalOpen()" (click)="closeModal()">
+    <div class="modal-dialog" (click)="$event.stopPropagation()">
+      <!-- Modal Header -->
+      <div class="modal-header">
+        <div class="modal-title-box">
+          <h2 class="modal-title">{{ i18n.t('modal.add_title') }}</h2>
+          <p class="modal-subtitle">Заполнение реквизитов и назначение пароля для входа в JanaMen</p>
+        </div>
+        <button type="button" class="modal-close-btn" (click)="closeModal()">
+          <app-icon name="x" [size]="18"></app-icon>
+        </button>
+      </div>
+
+      <!-- Modal Body Form -->
+      <form (ngSubmit)="onCreateEmployee()" #addForm="ngForm">
+        <div class="modal-body">
+          <!-- Error alert -->
+          <div class="error-alert" *ngIf="modalError()">
+            <app-icon name="alert-triangle" [size]="16"></app-icon>
+            <span>{{ modalError() }}</span>
+          </div>
+
+          <div class="modal-grid-2">
+            <!-- IIN -->
+            <div class="modal-field">
+              <label for="newIin">{{ i18n.t('modal.iin_label') }} *</label>
+              <input
+                id="newIin"
+                type="text"
+                maxlength="12"
+                name="newIin"
+                [(ngModel)]="newEmployee.iin"
+                placeholder="Например, 940303300444"
+                required
+              />
+              <div class="field-hint">{{ i18n.t('modal.iin_hint') }}</div>
+            </div>
+
+            <!-- Password chosen by HR Manager -->
+            <div class="modal-field">
+              <label for="newPassword">Пароль сотрудника (задаётся HR) *</label>
+              <div class="password-input-row">
+                <div class="input-wrapper-inner">
+                  <input
+                    id="newPassword"
+                    [type]="showModalPassword() ? 'text' : 'password'"
+                    name="newPassword"
+                    [(ngModel)]="newEmployee.password"
+                    placeholder="Введите пароль..."
+                    required
+                  />
+                  <button
+                    type="button"
+                    class="btn-toggle-pass"
+                    (click)="togglePasswordVisibility()"
+                    title="Показать/скрыть"
+                  >
+                    <app-icon [name]="showModalPassword() ? 'eye-off' : 'eye'" [size]="15"></app-icon>
+                  </button>
+                </div>
+                <button
+                  type="button"
+                  class="btn-generate-pass"
+                  (click)="generateRandomPassword()"
+                  title="Сгенерировать случайный надежный пароль"
+                >
+                  Сгенерировать
+                </button>
+              </div>
+              <div class="field-hint">HR указывает пароль самостоятельно (мин. 6 знаков)</div>
+            </div>
+          </div>
+
+          <!-- Full Name (ФИО) -->
+          <div class="modal-field">
+            <label for="newFullName">ФИО сотрудника (Фамилия Имя Отчество) *</label>
+            <input
+              id="newFullName"
+              type="text"
+              name="newFullName"
+              [(ngModel)]="newEmployee.full_name"
+              placeholder="Например: Касымов Бахыт Муратович"
+              required
+            />
+            <div class="field-hint">Указывайте полное имя гражданина с отчеством</div>
+          </div>
+
+          <div class="modal-grid-2">
+            <!-- Role -->
+            <div class="modal-field">
+              <label for="newRole">{{ i18n.t('modal.role_label') }} *</label>
+              <select id="newRole" name="newRole" [(ngModel)]="newEmployee.role" required>
+                <option value="employee">{{ i18n.t('role.employee') }}</option>
+                <option value="manager">{{ i18n.t('role.manager') }}</option>
+              </select>
+            </div>
+
+            <!-- Department -->
+            <div class="modal-field">
+              <label for="newDept">{{ i18n.t('modal.dept_label') }} *</label>
+              <!-- For HR: full selection of departments -->
+              <select *ngIf="authService.isHr()" id="newDept" name="newDept" [(ngModel)]="newEmployee.department_id" required>
+                <option *ngFor="let dept of departments()" [ngValue]="dept.id">
+                  {{ dept.id }}. {{ i18n.currentLang() === 'ru' ? dept.name_ru : dept.name_kz }}
+                </option>
+              </select>
+
+              <!-- For Manager: locked to manager's department -->
+              <div *ngIf="!authService.isHr()" class="locked-dept-pill">
+                <app-icon name="shield" [size]="15"></app-icon>
+                <span>{{ managerDepartmentName() }}</span>
+              </div>
+              <div class="field-hint" *ngIf="!authService.isHr()">Сотрудник привязывается к вашему отделу</div>
+            </div>
+          </div>
+
+          <div class="modal-grid-2">
+            <!-- Position -->
+            <div class="modal-field">
+              <label for="newPosition">{{ i18n.t('modal.position_label') }} *</label>
+              <input
+                id="newPosition"
+                type="text"
+                name="newPosition"
+                [(ngModel)]="newEmployee.position"
+                placeholder="Менеджер по обработке заказов"
+                required
+              />
+            </div>
+
+            <!-- Vacation Days -->
+            <div class="modal-field">
+              <label for="newVacation">{{ i18n.t('modal.vacation_label') }}</label>
+              <input
+                id="newVacation"
+                type="number"
+                name="newVacation"
+                [(ngModel)]="newEmployee.vacation_days_left"
+                min="0"
+                max="60"
+              />
+            </div>
+          </div>
+        </div>
+
+        <!-- Modal Footer -->
+        <div class="modal-footer">
+          <button type="button" class="btn-cancel" (click)="closeModal()" [disabled]="isSubmitting()">
+            {{ i18n.t('modal.btn_cancel') }}
+          </button>
+          <button type="submit" class="btn-submit" [disabled]="isSubmitting()">
+            <span class="spinner" *ngIf="isSubmitting()"></span>
+            <app-icon name="check" [size]="16" *ngIf="!isSubmitting()"></app-icon>
+            <span>{{ i18n.t('modal.btn_submit') }}</span>
+          </button>
+        </div>
+      </form>
+    </div>
+  </div>
+</div>

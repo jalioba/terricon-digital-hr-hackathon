@@ -9,6 +9,7 @@ import (
 	"github.com/kilcdevs/janamen/internal/config"
 	"github.com/kilcdevs/janamen/internal/db"
 	"github.com/kilcdevs/janamen/internal/http/httputil"
+	"github.com/kilcdevs/janamen/internal/middleware"
 	"golang.org/x/crypto/bcrypt"
 )
 
@@ -60,6 +61,16 @@ func (h *Handler) CreateEmployee(w http.ResponseWriter, r *http.Request) {
 		httputil.Error(w, http.StatusBadRequest, "Роль должна быть 'employee', 'manager' или 'hr'")
 		return
 	}
+	claims := middleware.GetClaims(r.Context())
+	if claims != nil && claims.Role == "manager" {
+		if req.Role == "hr" {
+			httputil.Error(w, http.StatusForbidden, "Руководитель не может создавать учетные записи с ролью HR")
+			return
+		}
+		// Manager can strictly only add employees to their own department
+		req.DepartmentID = claims.DepartmentID
+	}
+
 	if req.Role != "hr" && req.DepartmentID == nil {
 		httputil.Error(w, http.StatusBadRequest, "Для сотрудника и руководителя необходимо выбрать отдел")
 		return
@@ -129,6 +140,28 @@ func (h *Handler) CreateEmployee(w http.ResponseWriter, r *http.Request) {
 }
 
 func (h *Handler) ListEmployees(w http.ResponseWriter, r *http.Request) {
+	claims := middleware.GetClaims(r.Context())
+	if claims == nil {
+		httputil.Error(w, http.StatusUnauthorized, "Не авторизован")
+		return
+	}
+
+	// Managers only see employees and managers belonging to their own department
+	if claims.Role == "manager" {
+		if claims.DepartmentID == nil {
+			httputil.JSON(w, http.StatusOK, []db.ListUsersByDepartmentRow{})
+			return
+		}
+		users, err := h.q.ListUsersByDepartment(r.Context(), claims.DepartmentID)
+		if err != nil {
+			httputil.Error(w, http.StatusInternalServerError, "Ошибка загрузки списка сотрудников отдела: "+err.Error())
+			return
+		}
+		httputil.JSON(w, http.StatusOK, users)
+		return
+	}
+
+	// HR manager and administrators see all employees across all departments
 	users, err := h.q.ListAllUsers(r.Context())
 	if err != nil {
 		httputil.Error(w, http.StatusInternalServerError, "Ошибка загрузки списка сотрудников: "+err.Error())
