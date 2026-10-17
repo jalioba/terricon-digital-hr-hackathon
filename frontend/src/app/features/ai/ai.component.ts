@@ -41,7 +41,8 @@ export class AiComponent implements OnInit, AfterViewChecked {
         { label: 'Сводка по заявкам сотрудников', icon: 'file-text' },
         { label: 'Список подразделений компании', icon: 'home' },
         { label: 'Какие регламенты есть в базе знаний?', icon: 'book-open' },
-        { label: 'Сколько у меня дней отпуска?', icon: 'calendar' }
+        { label: 'Сколько у меня дней отпуска?', icon: 'calendar' },
+        { label: 'Какие у тебя полномочия?', icon: 'shield' }
       ];
     }
 
@@ -52,7 +53,8 @@ export class AiComponent implements OnInit, AfterViewChecked {
         { label: 'Есть ли заявки на согласовании?', icon: 'file-text' },
         { label: 'Сколько у меня дней отпуска?', icon: 'calendar' },
         { label: 'Порядок согласования отпуска', icon: 'book-open' },
-        { label: 'Условия получения аванса', icon: 'wallet' }
+        { label: 'Условия получения аванса', icon: 'wallet' },
+        { label: 'Какие у тебя полномочия?', icon: 'shield' }
       ];
     }
 
@@ -63,7 +65,8 @@ export class AiComponent implements OnInit, AfterViewChecked {
       { label: 'Статус моих поданных заявок', icon: 'file-text' },
       { label: 'Как рассчитывается ежегодный отпуск?', icon: 'book-open' },
       { label: 'Условия и порядок выплаты аванса', icon: 'wallet' },
-      { label: 'Что делать при болезни и больничном?', icon: 'shield' }
+      { label: 'Что делать при болезни и больничном?', icon: 'shield' },
+      { label: 'Какие у тебя полномочия?', icon: 'sparkles' }
     ];
   });
 
