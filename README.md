@@ -10,7 +10,7 @@
 <p align="center">
   <img src="https://img.shields.io/badge/Angular-22.0-DD0031?style=for-the-badge&logo=angular&logoColor=white" alt="Angular" />
   <img src="https://img.shields.io/badge/Bun-Fast_Runtime-fbf0df?style=for-the-badge&logo=bun&logoColor=black" alt="Bun" />
-  <img src="https://img.shields.io/badge/Go-1.22+-00ADD8?style=for-the-badge&logo=go&logoColor=white" alt="Go" />
+  <img src="https://img.shields.io/badge/Go-1.27-00ADD8?style=for-the-badge&logo=go&logoColor=white" alt="Go" />
   <img src="https://img.shields.io/badge/sqlc-Type--safe_SQL-00599C?style=for-the-badge" alt="sqlc" />
   <img src="https://img.shields.io/badge/PostgreSQL-16-4169E1?style=for-the-badge&logo=postgresql&logoColor=white" alt="PostgreSQL" />
   <img src="https://img.shields.io/badge/Supabase-Backend_Services-3ECF8E?style=for-the-badge&logo=supabase&logoColor=white" alt="Supabase" />
@@ -79,7 +79,7 @@ flowchart TB
 
 ### Технологический стек:
 - **Frontend:** **Angular 22** (современная реактивность на Angular Signals, Standalone-компоненты, строгая типизация TypeScript, сборка и управление зависимостями через **Bun**).
-- **Backend:** **Go 1.22** (минималистичный роутер `chi`, кодогенератор типобезопасного SQL без тяжелых ORM — `sqlc`, пул соединений `pgx/v5`).
+- **Backend:** **Go 1.27** (минималистичный роутер `chi`, кодогенератор типобезопасного SQL без тяжелых ORM — `sqlc`, пул соединений `pgx/v5`).
 - **База данных:** **PostgreSQL 16** (хостинг на Supabase, нормализованная реляционная схема с каскадными связями и внешними ключами).
 - **Инфраструктура и деплой:**
   - Фронтенд: **Cloudflare Pages** с автоматической маршрутизацией SPA через `_redirects`.
