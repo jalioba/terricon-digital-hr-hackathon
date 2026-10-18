@@ -444,7 +444,7 @@ CORS_ORIGINS=http://localhost:4200,http://127.0.0.1:4200,https://kilcdevs.net
 AUTO_SEED=true
 
 # Пароль учетной записи HR-директора (динамически синхронизируется в БД при старте)
-PASSWORD_HR=MiRaS278v
+PASSWORD_HR=admin123
 ```
 
 > [!NOTE]
