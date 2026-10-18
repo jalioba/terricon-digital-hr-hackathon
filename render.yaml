@@ -1,0 +1,19 @@
+services:
+  - type: web
+    name: janamen-backend
+    env: docker
+    dockerfilePath: backend/Dockerfile
+    dockerContext: backend
+    plan: free
+    region: frankfurt
+    envVars:
+      - key: PORT
+        value: 8080
+      - key: DATABASE_URL
+        sync: false
+      - key: JWT_SECRET
+        sync: false
+      - key: CORS_ORIGINS
+        value: "https://kilcdevs.net,https://www.kilcdevs.net,https://janamen.pages.dev,http://localhost:4200"
+      - key: AUTO_SEED
+        value: "false"
