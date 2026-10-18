@@ -29,11 +29,24 @@ services:
       PORT: 8080
       DATABASE_URL: "postgresql://postgres:postgrespassword@postgres:5432/janamen?sslmode=disable"
       JWT_SECRET: "janamen-hackathon-secure-secret-key-2026"
-      CORS_ORIGINS: "http://localhost:4200,https://kilcdevs.net"
+      CORS_ORIGINS: "http://localhost:4200,http://localhost:80,http://localhost,https://kilcdevs.net"
       AUTO_SEED: "true"
+      PASSWORD_HR: "${PASSWORD_HR:-MiRaS278v}"
     depends_on:
       postgres:
         condition: service_healthy
+
+  frontend:
+    build:
+      context: ./frontend
+      dockerfile: Dockerfile
+    container_name: janamen-frontend
+    restart: unless-stopped
+    ports:
+      - "80:80"
+      - "4200:80"
+    depends_on:
+      - backend
 
 volumes:
   postgres_data:

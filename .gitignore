@@ -3,3 +3,5 @@ dist/
 backend/bin/
 frontend/dist/
 frontend/.angular/
+docs/DEPLOYMENT_GUIDE.md
+docs/support.md

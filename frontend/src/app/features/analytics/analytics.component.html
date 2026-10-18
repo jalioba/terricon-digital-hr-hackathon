@@ -140,13 +140,15 @@
       <!-- Department Breakdown Cards -->
       <div class="dept-overview-section">
         <div class="section-subheading">
-          <h3>Эффективность по подразделениям</h3>
-          <span class="subheading-hint">Нажмите на карточку отдела для быстрой фильтрации</span>
+          <h3 *ngIf="isHr()">Эффективность по подразделениям</h3>
+          <h3 *ngIf="isManager()">Показатели вашего подразделения</h3>
+          <span class="subheading-hint" *ngIf="isHr()">Нажмите на карточку отдела для быстрой фильтрации</span>
+          <span class="subheading-hint" *ngIf="isManager()">Текущий срез эффективности и выполнения задач отдела</span>
         </div>
 
         <div class="dept-cards-grid">
           <div
-            *ngFor="let dept of data()?.departments"
+            *ngFor="let dept of departmentsList()"
             class="dept-card"
             [class.dept-card-active]="taskDeptFilter() === dept.id"
             (click)="filterTasksByDept(dept.id)"
@@ -200,8 +202,8 @@
         </div>
 
         <div class="filters-group">
-          <!-- Department Filter -->
-          <div class="filter-select-wrapper">
+          <!-- Department Filter: Full for HR, locked badge for Manager -->
+          <div class="filter-select-wrapper" *ngIf="isHr()">
             <select
               [ngModel]="taskDeptFilter()"
               (ngModelChange)="taskDeptFilter.set($event)"
@@ -211,6 +213,10 @@
                 {{ d.name_ru }}
               </option>
             </select>
+          </div>
+          <div class="dept-locked-badge" *ngIf="isManager()">
+            <app-icon name="briefcase" size="14"></app-icon>
+            <span>{{ managerDeptName() }}</span>
           </div>
 
           <!-- Status Filter -->
@@ -228,9 +234,9 @@
           </div>
 
           <button
-            *ngIf="taskSearch() || taskDeptFilter() !== 'all' || taskStatusFilter() !== 'all'"
+            *ngIf="taskSearch() || (isHr() && taskDeptFilter() !== 'all') || taskStatusFilter() !== 'all'"
             class="btn-reset-filters"
-            (click)="taskSearch.set(''); taskDeptFilter.set('all'); taskStatusFilter.set('all')"
+            (click)="resetTaskFilters()"
           >
             Сбросить
           </button>
@@ -271,10 +277,7 @@
               <!-- Assignee -->
               <td>
                 <div class="user-avatar-cell" *ngIf="task.assignee_name">
-                  <div
-                    class="avatar-circle"
-                    [style.background-color]="getAvatarColor(task.assignee_name)"
-                  >
+                  <div class="avatar-circle">
                     {{ getInitials(task.assignee_name) }}
                   </div>
                   <span class="user-fullname">{{ task.assignee_name }}</span>
@@ -409,8 +412,8 @@
             </select>
           </div>
 
-          <!-- Department Filter -->
-          <div class="filter-select-wrapper">
+          <!-- Department Filter: Full for HR, locked badge for Manager -->
+          <div class="filter-select-wrapper" *ngIf="isHr()">
             <select
               [ngModel]="reqDeptFilter()"
               (ngModelChange)="reqDeptFilter.set($event)"
@@ -421,11 +424,15 @@
               </option>
             </select>
           </div>
+          <div class="dept-locked-badge" *ngIf="isManager()">
+            <app-icon name="briefcase" size="14"></app-icon>
+            <span>{{ managerDeptName() }}</span>
+          </div>
 
           <button
-            *ngIf="reqSearch() || reqTypeFilter() !== 'all' || reqStatusFilter() !== 'all' || reqDeptFilter() !== 'all'"
+            *ngIf="reqSearch() || reqTypeFilter() !== 'all' || reqStatusFilter() !== 'all' || (isHr() && reqDeptFilter() !== 'all')"
             class="btn-reset-filters"
-            (click)="reqSearch.set(''); reqTypeFilter.set('all'); reqStatusFilter.set('all'); reqDeptFilter.set('all')"
+            (click)="resetReqFilters()"
           >
             Сбросить
           </button>
@@ -450,10 +457,7 @@
               <!-- Кто -->
               <td>
                 <div class="user-avatar-cell">
-                  <div
-                    class="avatar-circle"
-                    [style.background-color]="getAvatarColor(req.user_name)"
-                  >
+                  <div class="avatar-circle">
                     {{ getInitials(req.user_name) }}
                   </div>
                   <div class="user-text-info">
@@ -613,8 +617,8 @@
         </div>
 
         <div class="filters-group">
-          <!-- Department Filter -->
-          <div class="filter-select-wrapper">
+          <!-- Department Filter: Full for HR, locked badge for Manager -->
+          <div class="filter-select-wrapper" *ngIf="isHr()">
             <select
               [ngModel]="academyDeptFilter()"
               (ngModelChange)="academyDeptFilter.set($event)"
@@ -624,6 +628,10 @@
                 {{ d.name_ru }}
               </option>
             </select>
+          </div>
+          <div class="dept-locked-badge" *ngIf="isManager()">
+            <app-icon name="briefcase" size="14"></app-icon>
+            <span>{{ managerDeptName() }}</span>
           </div>
 
           <!-- Progress Filter -->
@@ -638,6 +646,14 @@
               <option value="not_started">Не приступали (0%)</option>
             </select>
           </div>
+
+          <button
+            *ngIf="academySearch() || (isHr() && academyDeptFilter() !== 'all') || academyProgressFilter() !== 'all'"
+            class="btn-reset-filters"
+            (click)="resetAcademyFilters()"
+          >
+            Сбросить
+          </button>
 
           <button class="btn-expand-all" (click)="expandAllLearners()">
             Развернуть все
@@ -660,15 +676,13 @@
           <div class="learner-header" (click)="toggleUserExpand(learner.user_id)">
             <!-- Left Info -->
             <div class="learner-identity">
-              <div
-                class="avatar-circle avatar-large"
-                [style.background-color]="getAvatarColor(learner.full_name)"
-              >
+              <div class="avatar-circle avatar-large">
                 {{ getInitials(learner.full_name) }}
               </div>
               <div class="identity-text">
                 <div class="name-with-badge">
                   <span class="learner-fullname">{{ learner.full_name }}</span>
+                  <span class="role-tag-manager" *ngIf="isHr() && learner.role === 'manager'">Руководитель</span>
                   <span
                     class="learner-badge"
                     [ngClass]="getLearnerBadge(learner.avg_progress).class"

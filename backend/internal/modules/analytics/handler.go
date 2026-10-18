@@ -103,6 +103,12 @@ func (h *Handler) GetAnalytics(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
 	now := time.Now()
 
+	isManager := c.Role == "manager"
+	var mgrDeptID int
+	if isManager && c.DepartmentID != nil {
+		mgrDeptID = *c.DepartmentID
+	}
+
 	// 1. Tasks
 	allTasks, err := h.q.ListAllTasks(ctx)
 	if err != nil {
@@ -116,6 +122,10 @@ func (h *Handler) GetAnalytics(w http.ResponseWriter, r *http.Request) {
 	tasksOverdue := 0
 
 	for _, t := range allTasks {
+		if isManager && t.DepartmentID != mgrDeptID {
+			continue
+		}
+
 		isOverdue := false
 		daysOverdue := 0
 		if t.DueDate != nil && t.Status != "done" && t.DueDate.Before(now) {
@@ -156,8 +166,8 @@ func (h *Handler) GetAnalytics(w http.ResponseWriter, r *http.Request) {
 	}
 
 	taskCompletionRate := 0.0
-	if len(allTasks) > 0 {
-		taskCompletionRate = math.Round((float64(tasksDone)/float64(len(allTasks))*100)*10) / 10
+	if len(taskItems) > 0 {
+		taskCompletionRate = math.Round((float64(tasksDone)/float64(len(taskItems))*100)*10) / 10
 	}
 
 	// 2. Requests
@@ -166,10 +176,8 @@ func (h *Handler) GetAnalytics(w http.ResponseWriter, r *http.Request) {
 		httputil.Error(w, http.StatusInternalServerError, "Ошибка получения списка заявок: "+err.Error())
 		return
 	}
-	if allRequests == nil {
-		allRequests = []db.ListAllRequestsRow{}
-	}
 
+	var filteredRequests []db.ListAllRequestsRow
 	reqApproved := 0
 	reqPending := 0
 	reqRevision := 0
@@ -178,6 +186,11 @@ func (h *Handler) GetAnalytics(w http.ResponseWriter, r *http.Request) {
 	totalVacationDays := 0
 
 	for _, r := range allRequests {
+		if isManager && r.DepartmentID != mgrDeptID {
+			continue
+		}
+		filteredRequests = append(filteredRequests, r)
+
 		switch r.Status {
 		case "approved":
 			reqApproved++
@@ -194,11 +207,17 @@ func (h *Handler) GetAnalytics(w http.ResponseWriter, r *http.Request) {
 			reqRejected++
 		}
 	}
+	if filteredRequests == nil {
+		filteredRequests = []db.ListAllRequestsRow{}
+	}
 
 	// 3. Departments & Breakdown
 	departments, _ := h.q.ListDepartments(ctx)
 	deptStatsMap := make(map[int]*DepartmentStat)
 	for _, d := range departments {
+		if isManager && d.ID != mgrDeptID {
+			continue
+		}
 		deptStatsMap[d.ID] = &DepartmentStat{
 			ID:     d.ID,
 			Code:   d.Code,
@@ -220,7 +239,7 @@ func (h *Handler) GetAnalytics(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 
-	for _, r := range allRequests {
+	for _, r := range filteredRequests {
 		if ds, ok := deptStatsMap[r.DepartmentID]; ok {
 			ds.RequestsTotal++
 		}
@@ -247,6 +266,10 @@ func (h *Handler) GetAnalytics(w http.ResponseWriter, r *http.Request) {
 	var totalProgressSum float64
 
 	for _, p := range progressRows {
+		if isManager && (p.DepartmentID == nil || *p.DepartmentID != mgrDeptID) {
+			continue
+		}
+
 		if p.DepartmentID != nil {
 			if ds, ok := deptStatsMap[*p.DepartmentID]; ok {
 				ds.LearnersCount++
@@ -348,8 +371,8 @@ func (h *Handler) GetAnalytics(w http.ResponseWriter, r *http.Request) {
 	}
 
 	avgCompanyProgress := 0.0
-	if len(progressRows) > 0 {
-		avgCompanyProgress = math.Round((totalProgressSum/float64(len(progressRows)))*10) / 10
+	if len(academyLearners) > 0 {
+		avgCompanyProgress = math.Round((totalProgressSum/float64(len(academyLearners)))*10) / 10
 	}
 
 	avgTestScore := 0.0
@@ -360,14 +383,14 @@ func (h *Handler) GetAnalytics(w http.ResponseWriter, r *http.Request) {
 	httputil.JSON(w, http.StatusOK, map[string]interface{}{
 		"summary": map[string]interface{}{
 			"tasks": map[string]interface{}{
-				"total":           len(allTasks),
+				"total":           len(taskItems),
 				"completed":       tasksDone,
 				"in_progress":     tasksInProgress,
 				"overdue":         tasksOverdue,
 				"completion_rate": taskCompletionRate,
 			},
 			"requests": map[string]interface{}{
-				"total":                len(allRequests),
+				"total":                len(filteredRequests),
 				"approved":             reqApproved,
 				"pending":              reqPending,
 				"revision":             reqRevision,
@@ -376,7 +399,7 @@ func (h *Handler) GetAnalytics(w http.ResponseWriter, r *http.Request) {
 				"total_vacation_days":  totalVacationDays,
 			},
 			"academy": map[string]interface{}{
-				"total_learners":       len(progressRows),
+				"total_learners":       len(academyLearners),
 				"completed_onboarding": completedOnboardingCount,
 				"avg_progress":         avgCompanyProgress,
 				"avg_score":            avgTestScore,
@@ -384,7 +407,7 @@ func (h *Handler) GetAnalytics(w http.ResponseWriter, r *http.Request) {
 		},
 		"departments": departmentStatsList,
 		"tasks":       taskItems,
-		"requests":    allRequests,
+		"requests":    filteredRequests,
 		"academy":     academyLearners,
 	})
 }

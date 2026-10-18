@@ -5,6 +5,7 @@
     "ng": "ng",
     "start": "ng serve",
     "build": "ng build",
+    "postbuild": "node -e \"const fs=require('fs'); const p='dist/frontend/browser'; if(fs.existsSync(p+'/index.csr.html') && !fs.existsSync(p+'/index.html')) fs.copyFileSync(p+'/index.csr.html', p+'/index.html');\"",
     "watch": "ng build --watch --configuration development",
     "test": "ng test",
     "serve:ssr:frontend": "node dist/frontend/server/server.mjs"

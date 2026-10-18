@@ -146,20 +146,41 @@ export class AnalyticsComponent implements OnInit {
   data = signal<AnalyticsPayload | null>(null);
   toastMessage = signal<string | null>(null);
 
+  // Role & Department context
+  isHr = computed(() => this.auth.isHr());
+  isManager = computed(() => this.auth.isManager());
+  currentUser = computed(() => this.auth.currentUser());
+  userDeptId = computed(() => this.auth.currentUser()?.department_id ?? null);
+  managerDeptName = computed(() => {
+    const u = this.currentUser();
+    if (!u) return '';
+    return u.dept_ru || (u.department_id ? `Отдел #${u.department_id}` : '');
+  });
+
+  // Departments list scoped for manager vs HR
+  departmentsList = computed(() => {
+    const payload = this.data();
+    if (!payload || !payload.departments) return [];
+    if (this.isManager() && this.userDeptId()) {
+      return payload.departments.filter(d => String(d.id) === String(this.userDeptId()));
+    }
+    return payload.departments;
+  });
+
   // Filters for Tab 1: Tasks
   taskSearch = signal<string>('');
-  taskDeptFilter = signal<number | 'all'>('all');
+  taskDeptFilter = signal<number | string>('all');
   taskStatusFilter = signal<string>('all'); // 'all' | 'done' | 'in_progress' | 'overdue' | 'rework'
 
   // Filters for Tab 2: Requests
   reqSearch = signal<string>('');
   reqTypeFilter = signal<string>('all'); // 'all' | 'vacation' | 'advance'
   reqStatusFilter = signal<string>('all'); // 'all' | 'approved' | 'pending' | 'revision_needed' | 'rejected'
-  reqDeptFilter = signal<number | 'all'>('all');
+  reqDeptFilter = signal<number | string>('all');
 
   // Filters for Tab 3: Academy
   academySearch = signal<string>('');
-  academyDeptFilter = signal<number | 'all'>('all');
+  academyDeptFilter = signal<number | string>('all');
   academyProgressFilter = signal<string>('all'); // 'all' | 'completed' | 'in_progress' | 'not_started'
 
   // Expandable state for Academy learners
@@ -170,7 +191,17 @@ export class AnalyticsComponent implements OnInit {
   selectedDocRequest = signal<RequestItem | null>(null);
 
   ngOnInit(): void {
+    this.initRoleFilters();
     this.loadAnalytics();
+  }
+
+  initRoleFilters(): void {
+    if (this.isManager() && this.userDeptId()) {
+      const deptId = this.userDeptId()!;
+      this.taskDeptFilter.set(deptId);
+      this.reqDeptFilter.set(deptId);
+      this.academyDeptFilter.set(deptId);
+    }
   }
 
   loadAnalytics(isRefresh = false): void {
@@ -183,6 +214,7 @@ export class AnalyticsComponent implements OnInit {
     this.api.get<AnalyticsPayload>('/analytics').subscribe({
       next: (res) => {
         this.data.set(res);
+        this.initRoleFilters();
         this.loading.set(false);
         this.refreshing.set(false);
         if (isRefresh) {
@@ -195,6 +227,7 @@ export class AnalyticsComponent implements OnInit {
         this.api.get<AnalyticsPayload>('/hr/analytics').subscribe({
           next: (res) => {
             this.data.set(res);
+            this.initRoleFilters();
             this.loading.set(false);
             this.refreshing.set(false);
           },
@@ -221,9 +254,14 @@ export class AnalyticsComponent implements OnInit {
     const search = this.taskSearch().trim().toLowerCase();
     const dept = this.taskDeptFilter();
     const status = this.taskStatusFilter();
+    const isMgr = this.isManager();
+    const mgrDept = this.userDeptId();
 
-    if (dept !== 'all') {
-      list = list.filter(t => t.department_id === dept);
+    // If manager, strictly enforce their department
+    if (isMgr && mgrDept) {
+      list = list.filter(t => String(t.department_id) === String(mgrDept));
+    } else if (dept !== 'all') {
+      list = list.filter(t => String(t.department_id) === String(dept));
     }
 
     if (status !== 'all') {
@@ -232,9 +270,9 @@ export class AnalyticsComponent implements OnInit {
       } else if (status === 'done') {
         list = list.filter(t => t.status === 'done');
       } else if (status === 'in_progress') {
-        list = list.filter(t => (t.status === 'in_progress' || t.status === 'new') && !t.is_overdue);
+        list = list.filter(t => (t.status === 'in_progress' || t.status === 'new' || t.status === 'todo' || t.status === 'review') && !t.is_overdue);
       } else if (status === 'rework') {
-        list = list.filter(t => t.status === 'rework');
+        list = list.filter(t => t.status === 'rework' || (!!t.rework_comment && t.rework_comment.trim().length > 0));
       }
     }
 
@@ -244,7 +282,10 @@ export class AnalyticsComponent implements OnInit {
         (t.description && t.description.toLowerCase().includes(search)) ||
         (t.assignee_name && t.assignee_name.toLowerCase().includes(search)) ||
         (t.creator_name && t.creator_name.toLowerCase().includes(search)) ||
-        (t.dept_name_ru && t.dept_name_ru.toLowerCase().includes(search))
+        (t.dept_name_ru && t.dept_name_ru.toLowerCase().includes(search)) ||
+        (t.dept_code && t.dept_code.toLowerCase().includes(search)) ||
+        String(t.id).includes(search) ||
+        ('#' + t.id).includes(search)
       );
     }
 
@@ -252,11 +293,20 @@ export class AnalyticsComponent implements OnInit {
   });
 
   filterTasksByDept(deptId: number): void {
-    if (this.taskDeptFilter() === deptId) {
+    if (this.isManager()) {
+      return; // Managers are locked to their own department
+    }
+    if (String(this.taskDeptFilter()) === String(deptId)) {
       this.taskDeptFilter.set('all');
     } else {
       this.taskDeptFilter.set(deptId);
     }
+  }
+
+  resetTaskFilters(): void {
+    this.taskSearch.set('');
+    this.taskDeptFilter.set(this.isManager() && this.userDeptId() ? this.userDeptId()! : 'all');
+    this.taskStatusFilter.set('all');
   }
 
   // --- TAB 2: Requests Computed & Methods ---
@@ -269,6 +319,15 @@ export class AnalyticsComponent implements OnInit {
     const type = this.reqTypeFilter();
     const status = this.reqStatusFilter();
     const dept = this.reqDeptFilter();
+    const isMgr = this.isManager();
+    const mgrDept = this.userDeptId();
+
+    // If manager, strictly enforce their department
+    if (isMgr && mgrDept) {
+      list = list.filter(r => String(r.department_id) === String(mgrDept));
+    } else if (dept !== 'all') {
+      list = list.filter(r => String(r.department_id) === String(dept));
+    }
 
     if (type !== 'all') {
       list = list.filter(r => r.type === type);
@@ -278,22 +337,28 @@ export class AnalyticsComponent implements OnInit {
       list = list.filter(r => r.status === status);
     }
 
-    if (dept !== 'all') {
-      list = list.filter(r => r.department_id === dept);
-    }
-
     if (search) {
       list = list.filter(r =>
         (r.user_name && r.user_name.toLowerCase().includes(search)) ||
         (r.user_position && r.user_position.toLowerCase().includes(search)) ||
         (r.comment && r.comment.toLowerCase().includes(search)) ||
         (r.manager_comment && r.manager_comment.toLowerCase().includes(search)) ||
-        (r.approver_name && r.approver_name.toLowerCase().includes(search))
+        (r.approver_name && r.approver_name.toLowerCase().includes(search)) ||
+        (r.dept_ru && r.dept_ru.toLowerCase().includes(search)) ||
+        (r.type === 'vacation' && 'отпуск'.includes(search)) ||
+        (r.type === 'advance' && 'аванс'.includes(search))
       );
     }
 
     return list;
   });
+
+  resetReqFilters(): void {
+    this.reqSearch.set('');
+    this.reqTypeFilter.set('all');
+    this.reqStatusFilter.set('all');
+    this.reqDeptFilter.set(this.isManager() && this.userDeptId() ? this.userDeptId()! : 'all');
+  }
 
   openDocumentPreview(req: RequestItem): void {
     this.selectedDocRequest.set(req);
@@ -312,14 +377,19 @@ export class AnalyticsComponent implements OnInit {
     const search = this.academySearch().trim().toLowerCase();
     const dept = this.academyDeptFilter();
     const progressFilter = this.academyProgressFilter();
+    const isMgr = this.isManager();
+    const mgrDept = this.userDeptId();
 
-    if (dept !== 'all') {
-      list = list.filter(l => l.department_id === dept);
+    // If manager, strictly enforce their department
+    if (isMgr && mgrDept) {
+      list = list.filter(l => l.department_id !== undefined && l.department_id !== null && String(l.department_id) === String(mgrDept));
+    } else if (dept !== 'all') {
+      list = list.filter(l => l.department_id !== undefined && l.department_id !== null && String(l.department_id) === String(dept));
     }
 
     if (progressFilter !== 'all') {
       if (progressFilter === 'completed') {
-        list = list.filter(l => l.avg_progress >= 100);
+        list = list.filter(l => l.avg_progress >= 100 || (l.completed_courses >= l.total_courses && l.total_courses > 0));
       } else if (progressFilter === 'in_progress') {
         list = list.filter(l => l.avg_progress > 0 && l.avg_progress < 100);
       } else if (progressFilter === 'not_started') {
@@ -331,12 +401,19 @@ export class AnalyticsComponent implements OnInit {
       list = list.filter(l =>
         (l.full_name && l.full_name.toLowerCase().includes(search)) ||
         (l.position && l.position.toLowerCase().includes(search)) ||
-        (l.dept_ru && l.dept_ru.toLowerCase().includes(search))
+        (l.dept_ru && l.dept_ru.toLowerCase().includes(search)) ||
+        (l.role && (l.role === 'manager' ? 'руководитель' : 'сотрудник').includes(search))
       );
     }
 
     return list;
   });
+
+  resetAcademyFilters(): void {
+    this.academySearch.set('');
+    this.academyDeptFilter.set(this.isManager() && this.userDeptId() ? this.userDeptId()! : 'all');
+    this.academyProgressFilter.set('all');
+  }
 
   toggleUserExpand(userId: number): void {
     const current = new Set(this.expandedUserIds());
@@ -398,16 +475,8 @@ export class AnalyticsComponent implements OnInit {
     return name.slice(0, 2).toUpperCase();
   }
 
-  getAvatarColor(name: string): string {
-    const colors = [
-      '#0284c7', '#0d9488', '#059669', '#d97706',
-      '#dc2626', '#7c3aed', '#db2777', '#4f46e5'
-    ];
-    let hash = 0;
-    for (let i = 0; i < (name || '').length; i++) {
-      hash = name.charCodeAt(i) + ((hash << 5) - hash);
-    }
-    return colors[Math.abs(hash) % colors.length];
+  getAvatarColor(name?: string): string {
+    return '#00a859';
   }
 
   formatDate(dateStr?: string): string {

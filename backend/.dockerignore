@@ -1,0 +1,5 @@
+.git
+.env
+api.exe
+*.exe
+*.tmp

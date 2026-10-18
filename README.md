@@ -524,7 +524,6 @@ bun start
      --allow-unauthenticated \
      --set-env-vars DATABASE_URL="[SUPABASE_URL]",JWT_SECRET="[JWT_SECRET]",PASSWORD_HR="[PASSWORD_HR]"
    ```
-
 ---
 
 ## 🌐 Двуязычная локализация (RU / KZ)
