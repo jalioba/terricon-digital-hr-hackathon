@@ -43,14 +43,14 @@ export class ProfileComponent implements OnInit {
   i18n = inject(I18nService);
 
   profileData = signal<UserProfileData | null>(null);
-  zupSource = signal<string>('1С:ЗУП ред. 3.1 КОРП');
-  isZupSynced = signal<boolean>(true);
   isLoading = signal<boolean>(true);
 
-  // Activity stats
+  // Activity & Role stats
   activeTasksCount = signal<number>(0);
   completedTasksCount = signal<number>(0);
-  academyCompletedCount = signal<number>(0);
+  academyCompletedPercent = signal<number>(100);
+  totalEmployeesCount = signal<number>(0);
+  teamMembersCount = signal<number>(0);
 
   // Password change form
   currentPassword = signal<string>('');
@@ -70,6 +70,70 @@ export class ProfileComponent implements OnInit {
       return (parts[0][0] + parts[1][0]).toUpperCase();
     }
     return parts[0].substring(0, 2).toUpperCase();
+  });
+
+  userEmail = computed(() => {
+    const prof = this.profileData();
+    if (!prof || !prof.full_name) return 'employee@janapost.kz';
+    const parts = prof.full_name.trim().toLowerCase().split(/\s+/);
+    const map: Record<string, string> = {
+      'а': 'a', 'б': 'b', 'в': 'v', 'г': 'g', 'д': 'd', 'е': 'e', 'ё': 'e',
+      'ж': 'zh', 'з': 'z', 'и': 'i', 'й': 'y', 'к': 'k', 'л': 'l', 'м': 'm',
+      'н': 'n', 'о': 'o', 'п': 'p', 'р': 'r', 'с': 's', 'т': 't', 'у': 'u',
+      'ф': 'f', 'х': 'kh', 'ц': 'ts', 'ч': 'ch', 'ш': 'sh', 'щ': 'shch',
+      'ъ': '', 'ы': 'y', 'ь': '', 'э': 'e', 'ю': 'yu', 'я': 'ya',
+      'ә': 'a', 'і': 'i', 'ң': 'n', 'ғ': 'g', 'ү': 'u', 'ұ': 'u', 'қ': 'q', 'ө': 'o', 'һ': 'h'
+    };
+    const translit = (str: string) => str.split('').map(c => map[c] !== undefined ? map[c] : c).join('').replace(/[^a-z0-9]/g, '');
+
+    if (parts.length >= 2) {
+      const firstInitial = translit(parts[1][0] || 'u');
+      const lastName = translit(parts[0] || 'user');
+      return `${firstInitial}.${lastName}@janapost.kz`;
+    }
+    return `${translit(parts[0])}@janapost.kz`;
+  });
+
+  profileTitle = computed(() => {
+    const role = this.profileData()?.role;
+    if (role === 'hr') return 'Личный кабинет HR-директора';
+    if (role === 'manager') return 'Личный кабинет руководителя';
+    return 'Личный кабинет сотрудника';
+  });
+
+  profileSubtitle = computed(() => {
+    const prof = this.profileData();
+    const role = prof?.role;
+    if (role === 'hr') {
+      return 'Сводные показатели по персоналу компании, контроль выполнения задач и параметры аккаунта';
+    }
+    if (role === 'manager') {
+      const dept = prof?.dept_ru ? ` (${prof.dept_ru})` : '';
+      return `Управление подразделением${dept}, мониторинг задач команды и параметры аккаунта`;
+    }
+    return 'Персональные кадровые данные, отпускной баланс, индивидуальные задачи и безопасность';
+  });
+
+  tasksCardTitle = computed(() => {
+    const role = this.profileData()?.role;
+    if (role === 'hr') return 'Задачи организации';
+    if (role === 'manager') return 'Задачи отдела';
+    return 'Мои задачи';
+  });
+
+  tasksCardCaption = computed(() => {
+    const prof = this.profileData();
+    const role = prof?.role;
+    if (role === 'hr') return 'Сводный контроль поручений по всем отделам компании';
+    if (role === 'manager') return `Контроль выполнения задач отдела ${prof?.dept_ru || ''}`;
+    return 'Индивидуальные поручения и задачи в работе';
+  });
+
+  fourthCardTitle = computed(() => {
+    const role = this.profileData()?.role;
+    if (role === 'hr') return 'Штат компании';
+    if (role === 'manager') return 'Команда отдела';
+    return 'Jana Academy';
   });
 
   tenureText = computed(() => {
@@ -102,7 +166,6 @@ export class ProfileComponent implements OnInit {
 
   ngOnInit(): void {
     this.loadProfile();
-    this.loadStats();
   }
 
   loadProfile(): void {
@@ -111,10 +174,7 @@ export class ProfileComponent implements OnInit {
       next: (res) => {
         if (res && res.profile) {
           this.profileData.set(res.profile);
-          if (res.zup_source) {
-            this.zupSource.set(res.zup_source);
-          }
-          this.isZupSynced.set(res.zup_sync === 'synced');
+          this.loadStats(res.profile.role);
         }
         this.isLoading.set(false);
       },
@@ -122,7 +182,7 @@ export class ProfileComponent implements OnInit {
         // Fallback to authService user if /me errors
         const u = this.authService.currentUser();
         if (u) {
-          this.profileData.set({
+          const fallbackData: UserProfileData = {
             id: u.id,
             iin: u.iin,
             full_name: u.full_name,
@@ -134,14 +194,18 @@ export class ProfileComponent implements OnInit {
             vacation_days_left: u.vacation_days_left || 24,
             created_at: new Date().toISOString(),
             dept_ru: u.dept_ru
-          });
+          };
+          this.profileData.set(fallbackData);
+          this.loadStats(fallbackData.role);
         }
         this.isLoading.set(false);
       }
     });
   }
 
-  loadStats(): void {
+  loadStats(role?: string): void {
+    const currentRole = role || this.authService.currentUser()?.role || this.profileData()?.role;
+
     // Load tasks stats
     this.api.get<any[]>('/tasks').subscribe({
       next: (tasks) => {
@@ -155,11 +219,35 @@ export class ProfileComponent implements OnInit {
       error: () => {}
     });
 
+    // If HR, load employee count
+    if (currentRole === 'hr') {
+      this.api.get<any[]>('/hr/employees').subscribe({
+        next: (employees) => {
+          if (Array.isArray(employees)) {
+            this.totalEmployeesCount.set(employees.length);
+          }
+        },
+        error: () => {}
+      });
+    }
+
+    // If Manager, load department team count
+    if (currentRole === 'manager') {
+      this.api.get<any[]>('/team').subscribe({
+        next: (team) => {
+          if (Array.isArray(team)) {
+            this.teamMembersCount.set(team.length);
+          }
+        },
+        error: () => {}
+      });
+    }
+
     // Load academy courses stats
     this.api.get<any[]>('/courses').subscribe({
       next: (courses) => {
         if (Array.isArray(courses)) {
-          this.academyCompletedCount.set(courses.length > 0 ? 2 : 0);
+          this.academyCompletedPercent.set(courses.length > 0 ? 100 : 0);
         }
       },
       error: () => {}

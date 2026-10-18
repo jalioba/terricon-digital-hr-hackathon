@@ -2,15 +2,15 @@
   <!-- Page Header -->
   <header class="profile-header">
     <div class="header-titles">
-      <h1 class="page-title">Профиль сотрудника</h1>
-      <p class="page-subtitle">Личное кадровое досье, параметры безопасности и интеграция с 1С:ЗУП</p>
+      <h1 class="page-title">{{ profileTitle() }}</h1>
+      <p class="page-subtitle">{{ profileSubtitle() }}</p>
     </div>
   </header>
 
   <!-- Loading State -->
   <div class="profile-loading" *ngIf="isLoading()">
     <div class="loading-spinner"></div>
-    <p>Загрузка кадрового досье из 1С:ЗУП...</p>
+    <p>Загрузка данных профиля...</p>
   </div>
 
   <div class="profile-content" *ngIf="!isLoading() && profileData() as prof">
@@ -27,9 +27,9 @@
           <h2 class="user-fullname">{{ prof.full_name }}</h2>
           <span class="role-badge" [attr.data-role]="prof.role">
             <app-icon name="shield" size="14"></app-icon>
-            <span *ngIf="prof.role === 'hr'">HR-директор</span>
-            <span *ngIf="prof.role === 'manager'">Руководитель</span>
-            <span *ngIf="prof.role === 'employee'">Работник</span>
+            <span *ngIf="prof.role === 'hr'">HR-руководитель</span>
+            <span *ngIf="prof.role === 'manager'">Руководитель отдела</span>
+            <span *ngIf="prof.role === 'employee'">Сотрудник</span>
           </span>
         </div>
 
@@ -43,10 +43,13 @@
             <app-icon name="home" size="15"></app-icon>
             <span>{{ prof.company }}</span>
           </div>
-          <div class="meta-divider" *ngIf="prof.dept_ru">•</div>
-          <div class="meta-item" *ngIf="prof.dept_ru">
+          <div class="meta-divider">•</div>
+          <div class="meta-item">
             <app-icon name="users" size="15"></app-icon>
-            <span class="dept-text">{{ prof.dept_ru }}</span>
+            <span class="dept-text">
+              <ng-container *ngIf="prof.role === 'hr'">Все подразделения компании</ng-container>
+              <ng-container *ngIf="prof.role !== 'hr'">{{ prof.dept_ru || 'Центральный офис' }}</ng-container>
+            </span>
           </div>
         </div>
 
@@ -56,20 +59,24 @@
         </div>
       </div>
 
-      <!-- 1C:ZUP Sync Badge Column -->
-      <div class="hero-sync-col">
-        <div class="zup-sync-card">
-          <div class="zup-badge-header">
-            <span class="sync-dot"></span>
-            <span class="sync-title">Синхронизировано</span>
+      <!-- Account Status Badge Column (Replaces 1C:ZUP mock sync card) -->
+      <div class="hero-status-col">
+        <div class="status-summary-card">
+          <div class="status-pill">
+            <span class="status-live-dot"></span>
+            <span class="status-text">Штатный сотрудник</span>
           </div>
-          <div class="zup-source-text">{{ zupSource() }}</div>
-          <div class="zup-status-sub">Режим: Read-Only (Только чтение)</div>
+          <div class="status-corp-email">{{ userEmail() }}</div>
+          <div class="status-zone-sub">
+            <span *ngIf="prof.role === 'hr'">Полномочия: Вся организация</span>
+            <span *ngIf="prof.role === 'manager'">Руководство: {{ prof.dept_ru || 'Подразделение' }}</span>
+            <span *ngIf="prof.role === 'employee'">Отдел: {{ prof.dept_ru || 'Штат' }}</span>
+          </div>
         </div>
       </div>
     </section>
 
-    <!-- KPI & Leave Metrics Grid -->
+    <!-- KPI & Role-aware Metrics Grid -->
     <section class="metrics-grid">
       <!-- Vacation Card -->
       <div class="metric-card vacation-card">
@@ -88,7 +95,12 @@
           <div class="progress-bar-fill" [style.width.%]="vacationPercent()"></div>
         </div>
         <p class="metric-caption">
-          Начисляется по 2 календарных дня за каждый полный месяц работы.
+          <ng-container *ngIf="prof.role === 'employee'">
+            Начисляется по 2 календарных дня за каждый полный месяц работы.
+          </ng-container>
+          <ng-container *ngIf="prof.role !== 'employee'">
+            Личный оплачиваемый отпускной баланс сотрудника.
+          </ng-container>
         </p>
       </div>
 
@@ -108,41 +120,172 @@
         </p>
       </div>
 
-      <!-- Tasks Activity Card -->
+      <!-- Tasks Activity Card (Role-aware: "Задачи организации" for HR, "Задачи отдела" for Manager, "Мои задачи" for Employee) -->
       <div class="metric-card">
         <div class="metric-header">
           <div class="metric-icon-wrap tasks-icon">
             <app-icon name="kanban" size="20"></app-icon>
           </div>
-          <span class="metric-label">Мои задачи</span>
+          <span class="metric-label">{{ tasksCardTitle() }}</span>
         </div>
         <div class="metric-tasks-split">
           <div class="task-stat-col">
             <span class="stat-num active-color">{{ activeTasksCount() }}</span>
-            <span class="stat-lbl">В работе</span>
+            <span class="stat-lbl">
+              <ng-container *ngIf="prof.role === 'hr'">В работе (все отделы)</ng-container>
+              <ng-container *ngIf="prof.role === 'manager'">В процессе (отдел)</ng-container>
+              <ng-container *ngIf="prof.role === 'employee'">В работе</ng-container>
+            </span>
           </div>
           <div class="task-stat-col">
             <span class="stat-num done-color">{{ completedTasksCount() }}</span>
             <span class="stat-lbl">Завершено</span>
           </div>
         </div>
-        <p class="metric-caption">Управление задачами в разделе «Задачи»</p>
+        <p class="metric-caption">{{ tasksCardCaption() }}</p>
       </div>
 
-      <!-- Academy Card -->
+      <!-- Fourth Card (Role-aware: Staff for HR, Team for Manager, Academy for Employee) -->
       <div class="metric-card">
         <div class="metric-header">
-          <div class="metric-icon-wrap academy-icon">
-            <app-icon name="graduation-cap" size="20"></app-icon>
+          <div class="metric-icon-wrap" [class.academy-icon]="prof.role === 'employee'" [class.team-icon]="prof.role !== 'employee'">
+            <app-icon [name]="prof.role === 'employee' ? 'graduation-cap' : 'users'" size="20"></app-icon>
           </div>
-          <span class="metric-label">Jana Academy</span>
+          <span class="metric-label">{{ fourthCardTitle() }}</span>
         </div>
-        <div class="metric-value-wrap">
-          <span class="metric-big-number">100%</span>
+
+        <!-- HR: Total employees across company -->
+        <div class="metric-value-wrap" *ngIf="prof.role === 'hr'">
+          <span class="metric-big-number">{{ totalEmployeesCount() || 8 }}</span>
+          <span class="metric-total-days">сотрудников</span>
         </div>
-        <p class="metric-caption">
+        <p class="metric-caption" *ngIf="prof.role === 'hr'">
+          Активные учетные записи персонала во всех подразделениях
+        </p>
+
+        <!-- Manager: Team members in department -->
+        <div class="metric-value-wrap" *ngIf="prof.role === 'manager'">
+          <span class="metric-big-number">{{ teamMembersCount() || 3 }}</span>
+          <span class="metric-total-days">в подчинении</span>
+        </div>
+        <p class="metric-caption" *ngIf="prof.role === 'manager'">
+          Сотрудники подразделения «{{ prof.dept_ru }}»
+        </p>
+
+        <!-- Employee: Jana Academy Onboarding -->
+        <div class="metric-value-wrap" *ngIf="prof.role === 'employee'">
+          <span class="metric-big-number">{{ academyCompletedPercent() }}%</span>
+        </div>
+        <p class="metric-caption" *ngIf="prof.role === 'employee'">
           Обязательные курсы адаптации и безопасности пройдены
         </p>
+      </div>
+    </section>
+
+    <!-- Responsibilities & Work Scope Section -->
+    <section class="responsibilities-card">
+      <div class="resp-header">
+        <div class="resp-icon-wrap">
+          <app-icon name="briefcase" size="20"></app-icon>
+        </div>
+        <div>
+          <h3 class="resp-title">Кадровые сведения и зона ответственности</h3>
+          <p class="resp-subtitle">Официальные параметры должности, формата работы и полномочий в JanaMen</p>
+        </div>
+      </div>
+
+      <div class="resp-grid">
+        <div class="resp-col">
+          <div class="resp-item">
+            <span class="resp-item-label">Организация:</span>
+            <span class="resp-item-value">{{ prof.company }}</span>
+          </div>
+          <div class="resp-item">
+            <span class="resp-item-label">Должность:</span>
+            <span class="resp-item-value">{{ prof.position || 'Специалист' }}</span>
+          </div>
+          <div class="resp-item">
+            <span class="resp-item-label">Подразделение:</span>
+            <span class="resp-item-value">
+              <ng-container *ngIf="prof.role === 'hr'">Центральный аппарат (Все подразделения)</ng-container>
+              <ng-container *ngIf="prof.role !== 'hr'">{{ prof.dept_ru || 'Центральный офис' }}</ng-container>
+            </span>
+          </div>
+          <div class="resp-item">
+            <span class="resp-item-label">Формат занятости:</span>
+            <span class="resp-item-value">Основное место работы, полный день</span>
+          </div>
+        </div>
+
+        <div class="resp-col">
+          <div class="resp-item">
+            <span class="resp-item-label">Корпоративный Email:</span>
+            <span class="resp-item-value font-mono">{{ userEmail() }}</span>
+          </div>
+          <div class="resp-item">
+            <span class="resp-item-label">ИИН сотрудника:</span>
+            <span class="resp-item-value font-mono">{{ prof.iin }}</span>
+          </div>
+          <div class="resp-item">
+            <span class="resp-item-label">Дата зачисления:</span>
+            <span class="resp-item-value">{{ prof.hired_at | date:'dd.MM.yyyy' }} г.</span>
+          </div>
+          <div class="resp-item">
+            <span class="resp-item-label">Статус учетной записи:</span>
+            <span class="resp-status-tag">
+              <span class="status-dot"></span>
+              Активна (Доступ подтверждён)
+            </span>
+          </div>
+        </div>
+
+        <div class="resp-col resp-powers-col">
+          <span class="resp-item-label">Функциональные полномочия:</span>
+          <div class="powers-list" *ngIf="prof.role === 'hr'">
+            <div class="power-item">
+              <app-icon name="check" size="14"></app-icon>
+              <span>Полное администрирование базы персонала и отделов компании</span>
+            </div>
+            <div class="power-item">
+              <app-icon name="check" size="14"></app-icon>
+              <span>Финальное утверждение отпусков и финансовых авансов</span>
+            </div>
+            <div class="power-item">
+              <app-icon name="check" size="14"></app-icon>
+              <span>Сквозной контроль задач и аналитика эффективности</span>
+            </div>
+          </div>
+
+          <div class="powers-list" *ngIf="prof.role === 'manager'">
+            <div class="power-item">
+              <app-icon name="check" size="14"></app-icon>
+              <span>Постановка и перераспределение задач сотрудникам отдела</span>
+            </div>
+            <div class="power-item">
+              <app-icon name="check" size="14"></app-icon>
+              <span>Первичное согласование заявок на отпуск и аванс команды</span>
+            </div>
+            <div class="power-item">
+              <app-icon name="check" size="14"></app-icon>
+              <span>Контроль результатов и обучения в Jana Academy</span>
+            </div>
+          </div>
+
+          <div class="powers-list" *ngIf="prof.role === 'employee'">
+            <div class="power-item">
+              <app-icon name="check" size="14"></app-icon>
+              <span>Исполнение индивидуальных задач и актуализация статусов</span>
+            </div>
+            <div class="power-item">
+              <app-icon name="check" size="14"></app-icon>
+              <span>Подача электронных заявлений на отпуск и выплату аванса</span>
+            </div>
+            <div class="power-item">
+              <app-icon name="check" size="14"></app-icon>
+              <span>Прохождение корпоративных курсов и тестов адаптации</span>
+            </div>
+          </div>
+        </div>
       </div>
     </section>
 

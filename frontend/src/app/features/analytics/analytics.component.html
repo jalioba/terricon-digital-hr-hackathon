@@ -1,0 +1,899 @@
+<div class="analytics-page">
+  <!-- Toast notification -->
+  <div *ngIf="toastMessage()" class="toast-notification">
+    <app-icon name="check-circle" size="18"></app-icon>
+    <span>{{ toastMessage() }}</span>
+  </div>
+
+  <!-- Page Header -->
+  <div class="page-header">
+    <div class="header-titles">
+      <div class="title-with-badge">
+        <h1 class="page-title">HR Аналитика и отчетность</h1>
+        <span class="live-pill">
+          <span class="pulse-dot"></span>
+          В реальном времени
+        </span>
+      </div>
+      <p class="page-subtitle">
+        Сводные показатели по задачам, кадровым заявкам и прогрессу обучения в Jana Academy
+      </p>
+    </div>
+
+    <div class="header-actions">
+      <button class="btn-refresh" (click)="loadAnalytics(true)" [disabled]="refreshing()">
+        <app-icon name="refresh-cw" size="15" [extraClass]="refreshing() ? 'spin' : ''"></app-icon>
+        <span>{{ refreshing() ? 'Обновление...' : 'Обновить данные' }}</span>
+      </button>
+    </div>
+  </div>
+
+  <!-- Main Tabs Selector -->
+  <div class="tabs-segmented-wrapper">
+    <div class="tabs-segmented">
+      <!-- Tab 1: Tasks -->
+      <button
+        class="tab-btn"
+        [class.active]="activeTab() === 'tasks'"
+        (click)="setActiveTab('tasks')"
+      >
+        <app-icon name="check-square" size="18"></app-icon>
+        <span class="tab-label">Задачи</span>
+        <span class="tab-badge" *ngIf="data()?.summary?.tasks?.total">
+          {{ data()?.summary?.tasks?.total }}
+        </span>
+        <span class="tab-badge-warning" *ngIf="(data()?.summary?.tasks?.overdue ?? 0) > 0">
+          ⚠️ {{ data()?.summary?.tasks?.overdue }}
+        </span>
+      </button>
+
+      <!-- Tab 2: Requests -->
+      <button
+        class="tab-btn"
+        [class.active]="activeTab() === 'requests'"
+        (click)="setActiveTab('requests')"
+      >
+        <app-icon name="file-text" size="18"></app-icon>
+        <span class="tab-label">Заявки</span>
+        <span class="tab-badge" *ngIf="data()?.summary?.requests?.total">
+          {{ data()?.summary?.requests?.total }}
+        </span>
+        <span class="tab-badge-pending" *ngIf="(data()?.summary?.requests?.pending ?? 0) > 0">
+          {{ data()?.summary?.requests?.pending }} новых
+        </span>
+      </button>
+
+      <!-- Tab 3: Jana Academy -->
+      <button
+        class="tab-btn"
+        [class.active]="activeTab() === 'academy'"
+        (click)="setActiveTab('academy')"
+      >
+        <app-icon name="graduation-cap" size="18"></app-icon>
+        <span class="tab-label">Jana Academy</span>
+        <span class="tab-badge" *ngIf="data()?.summary?.academy?.total_learners">
+          {{ data()?.summary?.academy?.total_learners }} сотр.
+        </span>
+        <span class="tab-badge-success" *ngIf="data()?.summary?.academy?.avg_progress">
+          {{ data()?.summary?.academy?.avg_progress }}%
+        </span>
+      </button>
+    </div>
+  </div>
+
+  <!-- Loading State -->
+  <div *ngIf="loading()" class="loading-state">
+    <div class="spinner"></div>
+    <p>Загрузка аналитических данных компании...</p>
+  </div>
+
+  <!-- Main Content When Loaded -->
+  <div *ngIf="!loading() && data()" class="tab-content-container">
+
+    <!-- ============================================================== -->
+    <!-- TAB 1: ЗАДАЧИ -->
+    <!-- ============================================================== -->
+    <section *ngIf="activeTab() === 'tasks'" class="analytics-tab-section">
+      <!-- KPI Metric Cards for Tasks -->
+      <div class="kpi-grid">
+        <div class="kpi-card">
+          <div class="kpi-icon-wrapper kpi-blue">
+            <app-icon name="check-square" size="22"></app-icon>
+          </div>
+          <div class="kpi-info">
+            <div class="kpi-value">{{ data()?.summary?.tasks?.total || 0 }}</div>
+            <div class="kpi-label">Всего назначено задач</div>
+          </div>
+        </div>
+
+        <div class="kpi-card">
+          <div class="kpi-icon-wrapper kpi-green">
+            <app-icon name="check-circle" size="22"></app-icon>
+          </div>
+          <div class="kpi-info">
+            <div class="kpi-value text-green">{{ data()?.summary?.tasks?.completed || 0 }}</div>
+            <div class="kpi-label">Успешно выполнено ({{ data()?.summary?.tasks?.completion_rate || 0 }}%)</div>
+          </div>
+        </div>
+
+        <div class="kpi-card">
+          <div class="kpi-icon-wrapper kpi-indigo">
+            <app-icon name="clock" size="22"></app-icon>
+          </div>
+          <div class="kpi-info">
+            <div class="kpi-value">{{ data()?.summary?.tasks?.in_progress || 0 }}</div>
+            <div class="kpi-label">В процессе / на проверке</div>
+          </div>
+        </div>
+
+        <div class="kpi-card" [class.kpi-card-alert]="(data()?.summary?.tasks?.overdue ?? 0) > 0">
+          <div class="kpi-icon-wrapper kpi-red">
+            <app-icon name="alert-triangle" size="22"></app-icon>
+          </div>
+          <div class="kpi-info">
+            <div class="kpi-value text-red">{{ data()?.summary?.tasks?.overdue || 0 }}</div>
+            <div class="kpi-label">Просроченных дедлайнов</div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Department Breakdown Cards -->
+      <div class="dept-overview-section">
+        <div class="section-subheading">
+          <h3>Эффективность по подразделениям</h3>
+          <span class="subheading-hint">Нажмите на карточку отдела для быстрой фильтрации</span>
+        </div>
+
+        <div class="dept-cards-grid">
+          <div
+            *ngFor="let dept of data()?.departments"
+            class="dept-card"
+            [class.dept-card-active]="taskDeptFilter() === dept.id"
+            (click)="filterTasksByDept(dept.id)"
+          >
+            <div class="dept-card-header">
+              <div class="dept-name-block">
+                <span class="dept-badge">{{ dept.code }}</span>
+                <span class="dept-name">{{ dept.name_ru }}</span>
+              </div>
+              <span class="dept-rate-pill">{{ dept.completion_rate }}%</span>
+            </div>
+
+            <!-- Progress Bar -->
+            <div class="dept-progress-bar-bg">
+              <div class="dept-progress-bar-fill" [style.width.%]="dept.completion_rate"></div>
+            </div>
+
+            <div class="dept-stats-row">
+              <div class="dept-stat-item">
+                <span class="num">{{ dept.tasks_total }}</span>
+                <span class="txt">задач</span>
+              </div>
+              <div class="dept-stat-item text-green">
+                <span class="num">{{ dept.tasks_completed }}</span>
+                <span class="txt">готово</span>
+              </div>
+              <div class="dept-stat-item text-blue">
+                <span class="num">{{ dept.tasks_in_progress }}</span>
+                <span class="txt">в работе</span>
+              </div>
+              <div class="dept-stat-item" [class.text-red]="dept.tasks_overdue > 0">
+                <span class="num">{{ dept.tasks_overdue }}</span>
+                <span class="txt">просрочено</span>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Filters & Search Toolbar -->
+      <div class="table-toolbar">
+        <div class="search-box">
+          <app-icon name="search" size="16"></app-icon>
+          <input
+            type="text"
+            placeholder="Поиск по названию задачи, исполнителю или описанию..."
+            [ngModel]="taskSearch()"
+            (ngModelChange)="taskSearch.set($event)"
+          />
+          <button *ngIf="taskSearch()" class="clear-btn" (click)="taskSearch.set('')">✕</button>
+        </div>
+
+        <div class="filters-group">
+          <!-- Department Filter -->
+          <div class="filter-select-wrapper">
+            <select
+              [ngModel]="taskDeptFilter()"
+              (ngModelChange)="taskDeptFilter.set($event)"
+            >
+              <option value="all">Все отделы ({{ data()?.tasks?.length || 0 }})</option>
+              <option *ngFor="let d of data()?.departments" [value]="d.id">
+                {{ d.name_ru }}
+              </option>
+            </select>
+          </div>
+
+          <!-- Status Filter -->
+          <div class="filter-select-wrapper">
+            <select
+              [ngModel]="taskStatusFilter()"
+              (ngModelChange)="taskStatusFilter.set($event)"
+            >
+              <option value="all">Все статусы</option>
+              <option value="done">Выполненные</option>
+              <option value="in_progress">В процессе</option>
+              <option value="overdue">⚠️ Просроченные</option>
+              <option value="rework">На доработке</option>
+            </select>
+          </div>
+
+          <button
+            *ngIf="taskSearch() || taskDeptFilter() !== 'all' || taskStatusFilter() !== 'all'"
+            class="btn-reset-filters"
+            (click)="taskSearch.set(''); taskDeptFilter.set('all'); taskStatusFilter.set('all')"
+          >
+            Сбросить
+          </button>
+        </div>
+      </div>
+
+      <!-- Tasks Table -->
+      <div class="data-table-container">
+        <table class="analytics-table">
+          <thead>
+            <tr>
+              <th style="width: 32%;">Задача и описание</th>
+              <th style="width: 18%;">Подразделение</th>
+              <th style="width: 16%;">Исполнитель</th>
+              <th style="width: 14%;">Постановщик</th>
+              <th style="width: 10%;">Срок</th>
+              <th style="width: 10%;">Статус</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr *ngFor="let task of filteredTasks()" [class.row-overdue]="task.is_overdue">
+              <!-- Title & Description -->
+              <td>
+                <div class="task-cell-title">
+                  <span class="task-title-text">{{ task.title }}</span>
+                  <p class="task-desc-text" *ngIf="task.description">{{ task.description }}</p>
+                  <div *ngIf="task.rework_comment" class="rework-notice">
+                    <strong>Доработка:</strong> {{ task.rework_comment }}
+                  </div>
+                </div>
+              </td>
+
+              <!-- Department -->
+              <td>
+                <span class="badge-dept">{{ task.dept_name_ru }}</span>
+              </td>
+
+              <!-- Assignee -->
+              <td>
+                <div class="user-avatar-cell" *ngIf="task.assignee_name">
+                  <div
+                    class="avatar-circle"
+                    [style.background-color]="getAvatarColor(task.assignee_name)"
+                  >
+                    {{ getInitials(task.assignee_name) }}
+                  </div>
+                  <span class="user-fullname">{{ task.assignee_name }}</span>
+                </div>
+                <span *ngIf="!task.assignee_name" class="text-muted">Не назначен</span>
+              </td>
+
+              <!-- Creator -->
+              <td>
+                <span class="creator-name">{{ task.creator_name || 'Система' }}</span>
+              </td>
+
+              <!-- Due Date & Overdue Indicator -->
+              <td>
+                <div class="due-date-cell">
+                  <span class="date-val" [class.date-overdue]="task.is_overdue">
+                    {{ formatDate(task.due_date) }}
+                  </span>
+                  <span *ngIf="task.is_overdue" class="overdue-tag">
+                    ⚠️ Просрочена на {{ task.days_overdue }} дн.
+                  </span>
+                </div>
+              </td>
+
+              <!-- Status -->
+              <td>
+                <span
+                  class="status-badge"
+                  [ngClass]="getTaskStatusBadgeClass(task.status, task.is_overdue)"
+                >
+                  {{ getTaskStatusLabel(task.status, task.is_overdue) }}
+                </span>
+              </td>
+            </tr>
+
+            <!-- Empty State -->
+            <tr *ngIf="filteredTasks().length === 0">
+              <td colspan="6" class="table-empty-state">
+                <app-icon name="search" size="32"></app-icon>
+                <p>По выбранным фильтрам задачи не найдены</p>
+              </td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+    </section>
+
+    <!-- ============================================================== -->
+    <!-- TAB 2: ЗАЯВКИ -->
+    <!-- ============================================================== -->
+    <section *ngIf="activeTab() === 'requests'" class="analytics-tab-section">
+      <!-- KPI Metric Cards for Requests -->
+      <div class="kpi-grid">
+        <div class="kpi-card">
+          <div class="kpi-icon-wrapper kpi-blue">
+            <app-icon name="file-text" size="22"></app-icon>
+          </div>
+          <div class="kpi-info">
+            <div class="kpi-value">{{ data()?.summary?.requests?.total || 0 }}</div>
+            <div class="kpi-label">Всего подано заявок</div>
+          </div>
+        </div>
+
+        <div class="kpi-card">
+          <div class="kpi-icon-wrapper kpi-green">
+            <app-icon name="check-circle" size="22"></app-icon>
+          </div>
+          <div class="kpi-info">
+            <div class="kpi-value text-green">{{ data()?.summary?.requests?.approved || 0 }}</div>
+            <div class="kpi-label">Одобрено и проведено</div>
+          </div>
+        </div>
+
+        <div class="kpi-card">
+          <div class="kpi-icon-wrapper kpi-amber">
+            <app-icon name="clock" size="22"></app-icon>
+          </div>
+          <div class="kpi-info">
+            <div class="kpi-value text-amber">{{ data()?.summary?.requests?.pending || 0 }}</div>
+            <div class="kpi-label">На рассмотрении</div>
+          </div>
+        </div>
+
+        <div class="kpi-card">
+          <div class="kpi-icon-wrapper kpi-indigo">
+            <app-icon name="dollar-sign" size="22"></app-icon>
+          </div>
+          <div class="kpi-info">
+            <div class="kpi-value">{{ formatMoney(data()?.summary?.requests?.total_advance_amount || 0) }}</div>
+            <div class="kpi-label">Согласовано авансов</div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Requests Filters Toolbar -->
+      <div class="table-toolbar">
+        <div class="search-box">
+          <app-icon name="search" size="16"></app-icon>
+          <input
+            type="text"
+            placeholder="Поиск по ФИО сотрудника, причине заявки или согласующему..."
+            [ngModel]="reqSearch()"
+            (ngModelChange)="reqSearch.set($event)"
+          />
+          <button *ngIf="reqSearch()" class="clear-btn" (click)="reqSearch.set('')">✕</button>
+        </div>
+
+        <div class="filters-group">
+          <!-- Type Filter -->
+          <div class="filter-select-wrapper">
+            <select
+              [ngModel]="reqTypeFilter()"
+              (ngModelChange)="reqTypeFilter.set($event)"
+            >
+              <option value="all">Все типы заявок</option>
+              <option value="vacation">🏖️ Ежегодный отпуск</option>
+              <option value="advance">💰 Аванс зарплаты</option>
+            </select>
+          </div>
+
+          <!-- Status Filter -->
+          <div class="filter-select-wrapper">
+            <select
+              [ngModel]="reqStatusFilter()"
+              (ngModelChange)="reqStatusFilter.set($event)"
+            >
+              <option value="all">Все статусы</option>
+              <option value="approved">Одобренные</option>
+              <option value="pending">На рассмотрении</option>
+              <option value="revision_needed">На доработке</option>
+              <option value="rejected">Отклоненные</option>
+            </select>
+          </div>
+
+          <!-- Department Filter -->
+          <div class="filter-select-wrapper">
+            <select
+              [ngModel]="reqDeptFilter()"
+              (ngModelChange)="reqDeptFilter.set($event)"
+            >
+              <option value="all">Все подразделения</option>
+              <option *ngFor="let d of data()?.departments" [value]="d.id">
+                {{ d.name_ru }}
+              </option>
+            </select>
+          </div>
+
+          <button
+            *ngIf="reqSearch() || reqTypeFilter() !== 'all' || reqStatusFilter() !== 'all' || reqDeptFilter() !== 'all'"
+            class="btn-reset-filters"
+            (click)="reqSearch.set(''); reqTypeFilter.set('all'); reqStatusFilter.set('all'); reqDeptFilter.set('all')"
+          >
+            Сбросить
+          </button>
+        </div>
+      </div>
+
+      <!-- Requests Comprehensive Table ("Кто, Когда, Что, С чем, Решение, Статус") -->
+      <div class="data-table-container">
+        <table class="analytics-table requests-table">
+          <thead>
+            <tr>
+              <th style="width: 22%;">Кто (Заявитель)</th>
+              <th style="width: 12%;">Когда</th>
+              <th style="width: 20%;">Что (Параметры)</th>
+              <th style="width: 22%;">С чем (Обоснование / Вложения)</th>
+              <th style="width: 14%;">Решение / Руководитель</th>
+              <th style="width: 10%;">Статус</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr *ngFor="let req of filteredRequests()">
+              <!-- Кто -->
+              <td>
+                <div class="user-avatar-cell">
+                  <div
+                    class="avatar-circle"
+                    [style.background-color]="getAvatarColor(req.user_name)"
+                  >
+                    {{ getInitials(req.user_name) }}
+                  </div>
+                  <div class="user-text-info">
+                    <span class="user-fullname">{{ req.user_name }}</span>
+                    <span class="user-role-sub">{{ req.user_position }}</span>
+                    <span class="user-dept-sub">{{ req.dept_ru }}</span>
+                  </div>
+                </div>
+              </td>
+
+              <!-- Когда -->
+              <td>
+                <div class="datetime-block">
+                  <span class="date-main">{{ formatDate(req.created_at) }}</span>
+                  <span class="time-sub">{{ formatDateTime(req.created_at).split(' ')[1] || '' }}</span>
+                </div>
+              </td>
+
+              <!-- Что -->
+              <td>
+                <div *ngIf="req.type === 'vacation'" class="req-what-block">
+                  <div class="type-pill type-vacation">
+                    <app-icon name="calendar" size="14"></app-icon>
+                    <span>Отпуск: {{ req.days_count }} дн.</span>
+                  </div>
+                  <div class="dates-range">
+                    {{ formatDate(req.date_from) }} — {{ formatDate(req.date_to) }}
+                  </div>
+                  <span class="paid-badge" *ngIf="req.is_paid">Оплачиваемый</span>
+                </div>
+
+                <div *ngIf="req.type === 'advance'" class="req-what-block">
+                  <div class="type-pill type-advance">
+                    <app-icon name="dollar-sign" size="14"></app-icon>
+                    <span>Аванс: {{ formatMoney(req.amount) }}</span>
+                  </div>
+                  <div class="dates-range" *ngIf="req.desired_date">
+                    к выплате: {{ formatDate(req.desired_date) }}
+                  </div>
+                </div>
+              </td>
+
+              <!-- С чем -->
+              <td>
+                <div class="reason-block">
+                  <p class="reason-text" *ngIf="req.comment">
+                    «{{ req.comment }}»
+                  </p>
+                  <p class="reason-text text-muted" *ngIf="!req.comment">
+                    Обоснование не указано
+                  </p>
+
+                  <!-- Attachment link / preview button -->
+                  <div *ngIf="req.document_url" class="doc-attachment-btn" (click)="openDocumentPreview(req)">
+                    <app-icon name="file-text" size="14"></app-icon>
+                    <span>Прикрепленный документ</span>
+                  </div>
+                </div>
+              </td>
+
+              <!-- Решение -->
+              <td>
+                <div class="decision-block">
+                  <div *ngIf="req.approver_name" class="approver-info">
+                    <span class="approver-name">{{ req.approver_name }}</span>
+                    <span class="approved-date" *ngIf="req.approved_at">{{ formatDate(req.approved_at) }}</span>
+                  </div>
+                  <span *ngIf="!req.approver_name" class="text-muted">Ожидает решения</span>
+
+                  <!-- Manager comment if present -->
+                  <div *ngIf="req.manager_comment" class="manager-comment-quote">
+                    💬 «{{ req.manager_comment }}»
+                  </div>
+                </div>
+              </td>
+
+              <!-- Статус -->
+              <td>
+                <span class="status-badge" [ngClass]="getRequestStatusBadgeClass(req.status)">
+                  {{ getRequestStatusLabel(req.status) }}
+                </span>
+              </td>
+            </tr>
+
+            <!-- Empty State -->
+            <tr *ngIf="filteredRequests().length === 0">
+              <td colspan="6" class="table-empty-state">
+                <app-icon name="search" size="32"></app-icon>
+                <p>По выбранным параметрам заявки не найдены</p>
+              </td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+    </section>
+
+    <!-- ============================================================== -->
+    <!-- TAB 3: JANA ACADEMY -->
+    <!-- ============================================================== -->
+    <section *ngIf="activeTab() === 'academy'" class="analytics-tab-section">
+      <!-- KPI Metric Cards for Academy -->
+      <div class="kpi-grid">
+        <div class="kpi-card">
+          <div class="kpi-icon-wrapper kpi-blue">
+            <app-icon name="users" size="22"></app-icon>
+          </div>
+          <div class="kpi-info">
+            <div class="kpi-value">{{ data()?.summary?.academy?.total_learners || 0 }}</div>
+            <div class="kpi-label">Сотрудников на обучении</div>
+          </div>
+        </div>
+
+        <div class="kpi-card">
+          <div class="kpi-icon-wrapper kpi-green">
+            <app-icon name="graduation-cap" size="22"></app-icon>
+          </div>
+          <div class="kpi-info">
+            <div class="kpi-value text-green">
+              {{ data()?.summary?.academy?.completed_onboarding || 0 }} / {{ data()?.summary?.academy?.total_learners || 0 }}
+            </div>
+            <div class="kpi-label">Завершили онбординг (100%)</div>
+          </div>
+        </div>
+
+        <div class="kpi-card">
+          <div class="kpi-icon-wrapper kpi-indigo">
+            <app-icon name="bar-chart" size="22"></app-icon>
+          </div>
+          <div class="kpi-info">
+            <div class="kpi-value">{{ data()?.summary?.academy?.avg_progress || 0 }}%</div>
+            <div class="kpi-label">Средний прогресс по компании</div>
+          </div>
+        </div>
+
+        <div class="kpi-card">
+          <div class="kpi-icon-wrapper kpi-amber">
+            <app-icon name="award" size="22"></app-icon>
+          </div>
+          <div class="kpi-info">
+            <div class="kpi-value text-amber">{{ data()?.summary?.academy?.avg_score || 0 }} / 100</div>
+            <div class="kpi-label">Средний тестовый балл</div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Academy Toolbar & Controls -->
+      <div class="table-toolbar">
+        <div class="search-box">
+          <app-icon name="search" size="16"></app-icon>
+          <input
+            type="text"
+            placeholder="Поиск сотрудника по ФИО, должности или отделу..."
+            [ngModel]="academySearch()"
+            (ngModelChange)="academySearch.set($event)"
+          />
+          <button *ngIf="academySearch()" class="clear-btn" (click)="academySearch.set('')">✕</button>
+        </div>
+
+        <div class="filters-group">
+          <!-- Department Filter -->
+          <div class="filter-select-wrapper">
+            <select
+              [ngModel]="academyDeptFilter()"
+              (ngModelChange)="academyDeptFilter.set($event)"
+            >
+              <option value="all">Все подразделения</option>
+              <option *ngFor="let d of data()?.departments" [value]="d.id">
+                {{ d.name_ru }}
+              </option>
+            </select>
+          </div>
+
+          <!-- Progress Filter -->
+          <div class="filter-select-wrapper">
+            <select
+              [ngModel]="academyProgressFilter()"
+              (ngModelChange)="academyProgressFilter.set($event)"
+            >
+              <option value="all">Все результаты</option>
+              <option value="completed">Завершили 100%</option>
+              <option value="in_progress">В процессе обучения</option>
+              <option value="not_started">Не приступали (0%)</option>
+            </select>
+          </div>
+
+          <button class="btn-expand-all" (click)="expandAllLearners()">
+            Развернуть все
+          </button>
+
+          <button class="btn-collapse-all" (click)="collapseAllLearners()">
+            Свернуть
+          </button>
+        </div>
+      </div>
+
+      <!-- Academy Learners Expandable Accordion List -->
+      <div class="academy-learners-list">
+        <div
+          *ngFor="let learner of filteredAcademy()"
+          class="learner-accordion-card"
+          [class.card-expanded]="isUserExpanded(learner.user_id)"
+        >
+          <!-- Learner Header Bar (clickable) -->
+          <div class="learner-header" (click)="toggleUserExpand(learner.user_id)">
+            <!-- Left Info -->
+            <div class="learner-identity">
+              <div
+                class="avatar-circle avatar-large"
+                [style.background-color]="getAvatarColor(learner.full_name)"
+              >
+                {{ getInitials(learner.full_name) }}
+              </div>
+              <div class="identity-text">
+                <div class="name-with-badge">
+                  <span class="learner-fullname">{{ learner.full_name }}</span>
+                  <span
+                    class="learner-badge"
+                    [ngClass]="getLearnerBadge(learner.avg_progress).class"
+                  >
+                    {{ getLearnerBadge(learner.avg_progress).label }}
+                  </span>
+                </div>
+                <div class="learner-subinfo">
+                  <span class="learner-pos">{{ learner.position }}</span>
+                  <span class="bullet">•</span>
+                  <span class="learner-dept">{{ learner.dept_ru }}</span>
+                </div>
+              </div>
+            </div>
+
+            <!-- Right Metrics & Actions -->
+            <div class="learner-metrics-block">
+              <!-- Progress Bar -->
+              <div class="overall-progress-box">
+                <div class="progress-bar-label">
+                  <span>Общий прогресс:</span>
+                  <strong>{{ learner.avg_progress }}%</strong>
+                </div>
+                <div class="bar-track">
+                  <div
+                    class="bar-fill"
+                    [style.width.%]="learner.avg_progress"
+                    [class.bar-fill-done]="learner.avg_progress >= 100"
+                  ></div>
+                </div>
+              </div>
+
+              <!-- Courses count -->
+              <div class="metric-mini">
+                <span class="val">{{ learner.completed_courses }} / {{ learner.total_courses }}</span>
+                <span class="lbl">курсов пройдено</span>
+              </div>
+
+              <!-- Test score -->
+              <div class="metric-mini" *ngIf="learner.platform_score">
+                <span class="val text-green">{{ learner.platform_score }} б.</span>
+                <span class="lbl">балл теста</span>
+              </div>
+
+              <!-- Action: Remind -->
+              <button
+                class="btn-remind"
+                (click)="sendReminder(learner, $event)"
+                [disabled]="sendingReminderUserId() === learner.user_id || learner.avg_progress >= 100"
+                title="Отправить напоминание об обучении"
+              >
+                <app-icon name="send" size="14"></app-icon>
+                <span>{{ sendingReminderUserId() === learner.user_id ? 'Отправка...' : 'Напомнить' }}</span>
+              </button>
+
+              <!-- Chevron Expand Toggle -->
+              <button class="btn-chevron" type="button">
+                <app-icon
+                  [name]="isUserExpanded(learner.user_id) ? 'chevron-up' : 'chevron-down'"
+                  size="18"
+                ></app-icon>
+              </button>
+            </div>
+          </div>
+
+          <!-- Expanded Breakdown: Lightweight Test Results Summary (No heavy lesson texts or questions) -->
+          <div class="learner-breakdown-body" *ngIf="isUserExpanded(learner.user_id)">
+            <div class="breakdown-header">
+              <div class="header-left">
+                <h4>Сводка тестирования и аттестации</h4>
+                <span class="breakdown-subtitle">
+                  Баллы и процент выполнения тестов по направлениям платформы и регламентам работы
+                </span>
+              </div>
+              <a routerLink="/academy" class="link-to-academy">
+                <span>Ведомость в Jana Academy</span>
+                <app-icon name="arrow-right" size="14"></app-icon>
+              </a>
+            </div>
+
+            <div class="tests-summary-list">
+              <div
+                *ngFor="let course of learner.courses_detail"
+                class="test-score-card"
+                [class.test-passed]="course.progress >= 100 || ((course.score ?? 0) >= 70)"
+              >
+                <div class="test-title-col">
+                  <div class="track-tag" [class.tag-platform]="course.track === 'platform'">
+                    {{ course.track === 'platform' ? 'Часть 1: Платформа' : 'Часть 2: Задачи работы' }}
+                  </div>
+                  <div class="test-name">{{ course.title_ru }}</div>
+                </div>
+
+                <div class="test-progress-col">
+                  <div class="progress-lbl-val">
+                    <span>Пройдено:</span>
+                    <strong>{{ course.progress }}%</strong>
+                  </div>
+                  <div class="progress-track-sm">
+                    <div class="progress-fill-sm" [style.width.%]="course.progress" [class.fill-done]="course.progress >= 100"></div>
+                  </div>
+                </div>
+
+                <div class="test-score-col">
+                  <span class="test-score-pill" *ngIf="course.score !== null && course.score !== undefined" [class.score-high]="course.score >= 80" [class.score-mid]="course.score >= 60 && course.score < 80">
+                    <app-icon name="award" size="14"></app-icon>
+                    <span>{{ course.score }} / 100 баллов</span>
+                  </span>
+                  <span class="test-score-placeholder" *ngIf="course.score === null || course.score === undefined">
+                    {{ course.progress >= 100 ? '100% (Зачет)' : (course.progress > 0 ? 'Тест в процессе' : 'Не сдавался (0%)') }}
+                  </span>
+                </div>
+
+                <div class="test-status-col">
+                  <span
+                    class="test-status-tag"
+                    [class.tag-done]="course.progress >= 100"
+                    [class.tag-progress]="course.progress > 0 && course.progress < 100"
+                    [class.tag-empty]="course.progress === 0"
+                  >
+                    <app-icon [name]="course.progress >= 100 ? 'check-circle' : (course.progress > 0 ? 'clock' : 'circle')" size="13"></app-icon>
+                    <span>{{ course.progress >= 100 ? 'Сдан' : (course.progress > 0 ? 'В процессе' : 'Не сдан') }}</span>
+                  </span>
+                </div>
+              </div>
+
+              <div *ngIf="!learner.courses_detail || learner.courses_detail.length === 0" class="no-tests-msg">
+                <app-icon name="book-open" size="18"></app-icon>
+                <span>Назначенные тесты пока отсутствуют</span>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <!-- Empty State for Academy -->
+        <div *ngIf="filteredAcademy().length === 0" class="empty-academy-box">
+          <app-icon name="search" size="36"></app-icon>
+          <p>По выбранным параметрам сотрудники не найдены</p>
+        </div>
+      </div>
+    </section>
+  </div>
+
+  <!-- Document Preview Modal -->
+  <div *ngIf="selectedDocRequest()" class="modal-backdrop" (click)="closeDocumentPreview()">
+    <div class="modal-card doc-preview-modal" (click)="$event.stopPropagation()">
+      <div class="modal-header">
+        <div class="modal-title-group">
+          <app-icon name="file-text" size="20"></app-icon>
+          <h3>Прикрепленный документ к заявке #{{ selectedDocRequest()?.id }}</h3>
+        </div>
+        <button class="modal-close-btn" (click)="closeDocumentPreview()">✕</button>
+      </div>
+
+      <div class="modal-body">
+        <div class="doc-meta-info">
+          <div class="meta-item">
+            <span class="lbl">Заявитель:</span>
+            <strong>{{ selectedDocRequest()?.user_name }}</strong> ({{ selectedDocRequest()?.user_position }})
+          </div>
+          <div class="meta-item">
+            <span class="lbl">Тип документа:</span>
+            <span>{{ selectedDocRequest()?.type === 'vacation' ? 'Заявление на ежегодный оплачиваемый отпуск' : 'Заявление на выплату аванса в счет заработной платы' }}</span>
+          </div>
+          <div class="meta-item">
+            <span class="lbl">Дата подачи:</span>
+            <span>{{ formatDate(selectedDocRequest()?.created_at) }}</span>
+          </div>
+          <div class="meta-item" *ngIf="selectedDocRequest()?.comment">
+            <span class="lbl">Обоснование:</span>
+            <em>«{{ selectedDocRequest()?.comment }}»</em>
+          </div>
+        </div>
+
+        <!-- Simulated Document Paper Sheet -->
+        <div class="paper-document-sheet">
+          <div class="sheet-header">
+            <div class="company-stamp">JanaPost Қазақстан</div>
+            <div class="reg-number">Вх. № JP-REQ-{{ selectedDocRequest()?.id }}/2026</div>
+          </div>
+
+          <div class="sheet-title">
+            ЗАЯВЛЕНИЕ СОТРУДНИКА
+          </div>
+
+          <div class="sheet-text-content">
+            <p>
+              Прошу согласовать предоставление {{ selectedDocRequest()?.type === 'vacation' ? 'ежегодного оплачиваемого трудового отпуска продолжительностью ' + selectedDocRequest()?.days_count + ' календарных дней' : 'авансового платежа в размере ' + formatMoney(selectedDocRequest()?.amount || 0) }}.
+            </p>
+            <p *ngIf="selectedDocRequest()?.type === 'vacation'">
+              Период отпуска: с <strong>{{ formatDate(selectedDocRequest()?.date_from) }}</strong> по <strong>{{ formatDate(selectedDocRequest()?.date_to) }}</strong> включительно.
+            </p>
+            <p *ngIf="selectedDocRequest()?.comment">
+              Причина / примечание: {{ selectedDocRequest()?.comment }}.
+            </p>
+            <p>
+              Обязуюсь соблюдать установленные регламенты компании и требования трудового распорядка.
+            </p>
+          </div>
+
+          <div class="sheet-footer">
+            <div class="signature-col">
+              <span class="sig-label">Подпись заявителя:</span>
+              <span class="digital-stamp">✓ ЭЦП верифицирована (IIN: {{ selectedDocRequest()?.user_id }})</span>
+            </div>
+            <div class="signature-col" *ngIf="selectedDocRequest()?.approver_name">
+              <span class="sig-label">Согласовано руководителем:</span>
+              <span class="digital-stamp stamp-approved">✓ {{ selectedDocRequest()?.approver_name }} ({{ formatDate(selectedDocRequest()?.approved_at) }})</span>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <div class="modal-footer">
+        <a
+          *ngIf="selectedDocRequest()?.document_url"
+          [href]="selectedDocRequest()?.document_url"
+          target="_blank"
+          class="btn-download-doc"
+        >
+          <app-icon name="download" size="15"></app-icon>
+          <span>Открыть оригинал файла</span>
+        </a>
+        <button class="btn-close-modal" (click)="closeDocumentPreview()">Закрыть</button>
+      </div>
+    </div>
+  </div>
+</div>

@@ -7,9 +7,10 @@ import (
 
 	"github.com/jackc/pgx/v5/pgxpool"
 	sqlfiles "github.com/kilcdevs/janamen/sql"
+	"golang.org/x/crypto/bcrypt"
 )
 
-func ConnectAndBootstrap(ctx context.Context, dbURL string, autoSeed bool) (*pgxpool.Pool, error) {
+func ConnectAndBootstrap(ctx context.Context, dbURL string, autoSeed bool, passwordHR string) (*pgxpool.Pool, error) {
 	if dbURL == "" {
 		return nil, fmt.Errorf("DATABASE_URL is empty")
 	}
@@ -53,6 +54,23 @@ func ConnectAndBootstrap(ctx context.Context, dbURL string, autoSeed bool) (*pgx
 				} else {
 					log.Println("Database seeded successfully!")
 				}
+			}
+		}
+	}
+
+	// Synchronize HR Director password from PASSWORD_HR env var
+	if passwordHR != "" {
+		hash, err := bcrypt.GenerateFromPassword([]byte(passwordHR), bcrypt.DefaultCost)
+		if err == nil {
+			_, err = pool.Exec(ctx, `
+				INSERT INTO users (iin, password_hash, full_name, role, company, position, vacation_days_left)
+				VALUES ('880101300555', $1, 'Сатпаева Айгерим Сериковна', 'hr', 'JanaPost', 'HR-директор', 24)
+				ON CONFLICT (iin) DO UPDATE SET password_hash = EXCLUDED.password_hash;
+			`, string(hash))
+			if err != nil {
+				log.Printf("Warning: failed to synchronize HR password from env: %v", err)
+			} else {
+				log.Println("HR administrator password synchronized with PASSWORD_HR from environment")
 			}
 		}
 	}

@@ -336,10 +336,35 @@ func (h *Handler) UpdateProgress(w http.ResponseWriter, r *http.Request) {
 	})
 }
 
+type UserCourseTest struct {
+	CourseID int    `json:"course_id"`
+	TitleRu  string `json:"title_ru"`
+	TitleKz  string `json:"title_kz"`
+	Track    string `json:"track"`
+	Status   string `json:"status"`
+	Progress int    `json:"progress"`
+	Score    *int   `json:"score"`
+}
+
+type HrOversightUserItem struct {
+	UserID            int              `json:"user_id"`
+	FullName          string           `json:"full_name"`
+	Position          string           `json:"position"`
+	Role              string           `json:"role"`
+	DepartmentID      *int             `json:"department_id"`
+	DeptRu            string           `json:"dept_ru"`
+	TotalCourses      int              `json:"total_courses"`
+	CompletedCourses  int              `json:"completed_courses"`
+	AvgProgress       float64          `json:"avg_progress"`
+	PlatformCompleted int              `json:"platform_completed"`
+	PlatformScore     int              `json:"platform_score"`
+	Courses           []UserCourseTest `json:"courses"`
+}
+
 func (h *Handler) ListHrOversight(w http.ResponseWriter, r *http.Request) {
 	c := middleware.GetClaims(r.Context())
-	if c == nil || c.Role != "hr" {
-		httputil.Error(w, http.StatusForbidden, "Доступ запрещен: только HR может просматривать сводку онбординга")
+	if c == nil || (c.Role != "hr" && c.Role != "manager") {
+		httputil.Error(w, http.StatusForbidden, "Доступ запрещен: только HR и руководители могут просматривать сводку обучения")
 		return
 	}
 
@@ -348,11 +373,87 @@ func (h *Handler) ListHrOversight(w http.ResponseWriter, r *http.Request) {
 		httputil.Error(w, http.StatusInternalServerError, "Ошибка загрузки сводки онбординга: "+err.Error())
 		return
 	}
-	if list == nil {
-		list = []db.ListAllUsersAcademyProgressRow{}
+
+	allCourses, _ := h.q.ListCourses(r.Context())
+
+	var result []HrOversightUserItem
+	for _, u := range list {
+		// Manager only sees members of their own department
+		if c.Role == "manager" && (c.DepartmentID == nil || u.DepartmentID == nil || *u.DepartmentID != *c.DepartmentID) {
+			continue
+		}
+
+		assignments, _ := h.q.ListAssignmentsByUser(r.Context(), u.UserID)
+		assignMap := make(map[int]db.ListAssignmentsByUserRow)
+		for _, a := range assignments {
+			assignMap[a.CourseID] = a
+		}
+
+		var userCourses []UserCourseTest
+		for _, crs := range allCourses {
+			// Check course relevance for user's role and department
+			isRelevant := false
+			if crs.Track == "platform" {
+				if crs.TargetRole == u.Role || crs.TargetRole == "all" {
+					isRelevant = true
+				}
+			} else {
+				// Track 2: job
+				if crs.DepartmentID == nil || (u.DepartmentID != nil && *crs.DepartmentID == *u.DepartmentID) {
+					if crs.TargetRole == u.Role || crs.TargetRole == "all" {
+						isRelevant = true
+					}
+				}
+			}
+
+			if !isRelevant {
+				continue
+			}
+
+			status := "not_started"
+			progress := 0
+			var score *int
+
+			if a, ok := assignMap[crs.ID]; ok {
+				status = a.Status
+				progress = a.Progress
+				score = a.Score
+			}
+
+			userCourses = append(userCourses, UserCourseTest{
+				CourseID: crs.ID,
+				TitleRu:  crs.TitleRu,
+				TitleKz:  crs.TitleKz,
+				Track:    crs.Track,
+				Status:   status,
+				Progress: progress,
+				Score:    score,
+			})
+		}
+		if userCourses == nil {
+			userCourses = []UserCourseTest{}
+		}
+
+		result = append(result, HrOversightUserItem{
+			UserID:            u.UserID,
+			FullName:          u.FullName,
+			Position:          u.Position,
+			Role:              u.Role,
+			DepartmentID:      u.DepartmentID,
+			DeptRu:            u.DeptRu,
+			TotalCourses:      len(userCourses),
+			CompletedCourses:  u.CompletedCourses,
+			AvgProgress:       u.AvgProgress,
+			PlatformCompleted: u.PlatformCompleted,
+			PlatformScore:     u.PlatformScore,
+			Courses:           userCourses,
+		})
+	}
+	if result == nil {
+		result = []HrOversightUserItem{}
 	}
 
-	httputil.JSON(w, http.StatusOK, list)
+	httputil.JSON(w, http.StatusOK, result)
 }
 
 type RemindInput struct {
@@ -363,8 +464,8 @@ type RemindInput struct {
 
 func (h *Handler) RemindOnboarding(w http.ResponseWriter, r *http.Request) {
 	c := middleware.GetClaims(r.Context())
-	if c == nil || c.Role != "hr" {
-		httputil.Error(w, http.StatusForbidden, "Отправлять напоминания может только HR")
+	if c == nil || (c.Role != "hr" && c.Role != "manager") {
+		httputil.Error(w, http.StatusForbidden, "Отправлять напоминания может только HR или руководитель")
 		return
 	}
 
@@ -376,16 +477,17 @@ func (h *Handler) RemindOnboarding(w http.ResponseWriter, r *http.Request) {
 
 	msg := input.Message
 	if msg == "" {
-		msg = "Напоминаем о необходимости завершить обязательное обучение на платформе Jana Academy."
+		msg = "Напоминаем о необходимости завершить тестирование по профессиональным регламентам в Jana Academy."
 	}
 
 	_ = h.q.CreateNotification(r.Context(), db.CreateNotificationParams{
 		UserID:  input.UserID,
 		Kind:    "academy",
-		Title:   "Напоминание: Обучение на платформе JanaMen",
+		Title:   "Напоминание: Тестирование в Jana Academy",
 		Message: msg,
 		Link:    "/academy",
 	})
 
 	httputil.JSON(w, http.StatusOK, map[string]string{"status": "reminder_sent"})
 }
+

@@ -6,7 +6,7 @@ INSERT INTO departments (code, name_ru, name_kz, description_ru, description_kz)
   ('it_support', 'Отдел IT и поддержки', 'IT және қолдау қызметі', 'Задачи по технической поддержке, инфраструктуре и клиентской поддержке', 'Техникалық қолдау, инфрақұрылым және клиенттерге қолдау көрсету міндеттері')
 ON CONFLICT (code) DO NOTHING;
 
--- Seed default HR Director profile: IIN 880101300555 / Password JanaMen2026!
+-- Seed default HR Director profile: IIN 880101300555 / Password loaded from PASSWORD_HR in .env
 INSERT INTO users (iin, password_hash, full_name, role, department_id, company, position, vacation_days_left)
 VALUES (
   '880101300555',

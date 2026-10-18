@@ -1,4 +1,4 @@
-import { Component, inject, signal } from '@angular/core';
+import { Component, inject, signal, OnInit } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { FormsModule } from '@angular/forms';
 import { Router } from '@angular/router';
@@ -13,26 +13,26 @@ import { IconComponent } from '../../shared/components/icon/icon.component';
   templateUrl: './login.component.html',
   styleUrl: './login.component.scss'
 })
-export class LoginComponent {
+export class LoginComponent implements OnInit {
   private authService = inject(AuthService);
   private router = inject(Router);
   i18n = inject(I18nService);
 
-  iin: string = '880101300555';
-  password: string = 'JanaMen2026!';
+  iin: string = '';
+  password: string = '';
   showPassword = signal<boolean>(false);
   isLoading = signal<boolean>(false);
   errorMessage = signal<string>('');
 
-  togglePasswordVisibility(): void {
-    this.showPassword.update((v) => !v);
+  ngOnInit(): void {
+    // When visiting the login page, clear any previous session so the header is not displayed
+    if (this.authService.isLoggedIn()) {
+      this.authService.logout();
+    }
   }
 
-  fillCredentials(iin: string, pass: string): void {
-    this.iin = iin;
-    this.password = pass;
-    this.errorMessage.set('');
-    this.onSubmit();
+  togglePasswordVisibility(): void {
+    this.showPassword.update((v) => !v);
   }
 
   onSubmit(): void {

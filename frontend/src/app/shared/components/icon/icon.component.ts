@@ -223,12 +223,45 @@ import { CommonModule } from '@angular/common';
         <polygon points="22 3 2 3 10 12.46 10 19 14 21 14 12.46 22 3"/>
       </g>
 
-      <!-- Chevron Left & Right -->
+      <!-- Menu / Hamburger -->
+      <g *ngSwitchCase="'menu'">
+        <line x1="4" y1="6" x2="20" y2="6"/>
+        <line x1="4" y1="12" x2="20" y2="12"/>
+        <line x1="4" y1="18" x2="20" y2="18"/>
+      </g>
+
+      <!-- Chevron Left & Right & Down & Up -->
       <g *ngSwitchCase="'chevron-left'">
         <polyline points="15 18 9 12 15 6"/>
       </g>
       <g *ngSwitchCase="'chevron-right'">
         <polyline points="9 18 15 12 9 6"/>
+      </g>
+      <g *ngSwitchCase="'chevron-down'">
+        <polyline points="6 9 12 15 18 9"/>
+      </g>
+      <g *ngSwitchCase="'chevron-up'">
+        <polyline points="18 15 12 9 6 15"/>
+      </g>
+
+      <!-- CheckSquare -->
+      <g *ngSwitchCase="'check-square'">
+        <polyline points="9 11 12 14 22 4"/>
+        <path d="M21 12v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11"/>
+      </g>
+
+      <!-- RefreshCw -->
+      <g *ngSwitchCase="'refresh-cw'">
+        <path d="M3 12a9 9 0 0 1 9-9 9.75 9.75 0 0 1 6.74 2.74L21 8"/>
+        <path d="M21 3v5h-5"/>
+        <path d="M21 12a9 9 0 0 1-9 9 9.75 9.75 0 0 1-6.74-2.74L3 16"/>
+        <path d="M8 16H3v5"/>
+      </g>
+
+      <!-- DollarSign -->
+      <g *ngSwitchCase="'dollar-sign'">
+        <line x1="12" y1="2" x2="12" y2="22"/>
+        <path d="M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6"/>
       </g>
 
       <!-- Paperclip / Attachment -->

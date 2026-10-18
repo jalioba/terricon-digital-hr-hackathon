@@ -872,6 +872,491 @@
   }
 }
 
+/* Track 2 Content Header & Department Badge */
+.job-content-section-top {
+  margin-bottom: 24px;
+
+  .section-title-bar {
+    margin-bottom: 16px;
+
+    .section-pre-pill {
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      padding: 3px 8px;
+      border-radius: 6px;
+      font-size: 11px;
+      font-weight: 700;
+      background-color: #f1f5f9;
+      color: #475569;
+      margin-bottom: 6px;
+    }
+
+    .section-heading {
+      font-size: 18px;
+      font-weight: 800;
+      color: #0f172a;
+      margin: 0 0 4px 0;
+      letter-spacing: -0.01em;
+    }
+
+    .section-subtext {
+      font-size: 13px;
+      color: #64748b;
+      margin: 0;
+    }
+  }
+
+  .dept-badge-fixed {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    padding: 6px 14px;
+    background-color: #eff6ff;
+    border: 1px solid #bfdbfe;
+    color: #1d4ed8;
+    font-weight: 700;
+    border-radius: 8px;
+    font-size: 13px;
+    align-self: flex-start;
+  }
+
+  .no-job-courses-hint {
+    grid-column: 1 / -1;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 8px;
+    padding: 36px;
+    background-color: #ffffff;
+    border: 1px dashed #cbd5e1;
+    border-radius: 10px;
+    color: #94a3b8;
+    font-size: 13px;
+  }
+}
+
+/* ========================================================
+   TRACK 2 BOTTOM: DEPARTMENT GRADEBOOK (СВОДНАЯ ВЕДОМОСТЬ)
+   ======================================================== */
+.job-gradebook-section {
+  margin-top: 36px;
+  padding-top: 32px;
+  border-top: 2px dashed #e2e8f0;
+
+  .gradebook-header-banner {
+    margin-bottom: 20px;
+
+    .banner-title-col {
+      .gradebook-badge {
+        display: inline-flex;
+        align-items: center;
+        gap: 6px;
+        padding: 3px 9px;
+        border-radius: 6px;
+        background-color: #ecfdf5;
+        border: 1px solid #a7f3d0;
+        color: #059669;
+        font-size: 11px;
+        font-weight: 700;
+        margin-bottom: 6px;
+      }
+
+      .gradebook-title {
+        font-size: 20px;
+        font-weight: 800;
+        color: #0f172a;
+        margin: 0 0 4px 0;
+        letter-spacing: -0.01em;
+      }
+
+      .gradebook-desc {
+        font-size: 13px;
+        color: #64748b;
+        margin: 0;
+      }
+    }
+  }
+
+  /* Gradebook KPI Summary Cards */
+  .gradebook-kpi-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+    gap: 14px;
+    margin-bottom: 20px;
+
+    .gkpi-card {
+      background-color: #ffffff;
+      border: 1px solid #e2e8f0;
+      border-radius: 10px;
+      padding: 16px;
+      display: flex;
+      flex-direction: column;
+      gap: 3px;
+      box-shadow: 0 1px 3px rgba(0, 0, 0, 0.03);
+
+      &.border-green {
+        border-top: 3px solid #10b981;
+      }
+
+      &.border-amber {
+        border-top: 3px solid #f59e0b;
+      }
+
+      &.border-blue {
+        border-top: 3px solid #3b82f6;
+      }
+
+      .kpi-label {
+        font-size: 11px;
+        font-weight: 600;
+        color: #64748b;
+        text-transform: uppercase;
+        letter-spacing: 0.02em;
+      }
+
+      .kpi-value {
+        font-size: 22px;
+        font-weight: 800;
+        color: #0f172a;
+
+        small {
+          font-size: 14px;
+          font-weight: 600;
+        }
+
+        &.text-green { color: #059669; }
+        &.text-amber { color: #d97706; }
+        &.text-blue { color: #2563eb; }
+      }
+
+      .kpi-hint {
+        font-size: 11px;
+        color: #94a3b8;
+      }
+    }
+  }
+
+  /* Toolbar: Search & Select Filters */
+  .gradebook-toolbar {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    gap: 14px;
+    flex-wrap: wrap;
+    margin-bottom: 16px;
+
+    .search-box {
+      position: relative;
+      display: flex;
+      align-items: center;
+
+      input {
+        width: 320px;
+        max-width: 100%;
+        padding: 8px 32px 8px 36px;
+        border: 1px solid #cbd5e1;
+        border-radius: 8px;
+        font-size: 13px;
+        outline: none;
+        transition: border-color 0.15s ease;
+
+        &:focus {
+          border-color: #00a859;
+          box-shadow: 0 0 0 3px rgba(0, 168, 89, 0.1);
+        }
+      }
+
+      .search-icon {
+        position: absolute;
+        left: 10px;
+        color: #94a3b8;
+        pointer-events: none;
+      }
+
+      .clear-btn {
+        position: absolute;
+        right: 8px;
+        background: transparent;
+        border: none;
+        color: #94a3b8;
+        cursor: pointer;
+        padding: 4px;
+        font-size: 12px;
+
+        &:hover {
+          color: #0f172a;
+        }
+      }
+    }
+
+    .filter-controls {
+      display: flex;
+      gap: 10px;
+      flex-wrap: wrap;
+
+      .filter-item {
+        .filter-select {
+          padding: 8px 12px;
+          border: 1px solid #cbd5e1;
+          border-radius: 8px;
+          font-size: 13px;
+          background-color: #ffffff;
+          color: #0f172a;
+          outline: none;
+          cursor: pointer;
+
+          &:focus {
+            border-color: #00a859;
+          }
+        }
+      }
+    }
+  }
+
+  /* Gradebook Table Card */
+  .gradebook-table-card {
+    background-color: #ffffff;
+    border: 1px solid #e2e8f0;
+    border-radius: 12px;
+    overflow: hidden;
+    box-shadow: 0 1px 3px rgba(0, 0, 0, 0.04);
+
+    .table-responsive {
+      overflow-x: auto;
+    }
+
+    .gradebook-table {
+      width: 100%;
+      border-collapse: collapse;
+      text-align: left;
+
+      th {
+        padding: 12px 16px;
+        background-color: #f8fafc;
+        font-size: 11px;
+        font-weight: 700;
+        color: #475569;
+        text-transform: uppercase;
+        letter-spacing: 0.04em;
+        border-bottom: 1px solid #e2e8f0;
+        white-space: nowrap;
+      }
+
+      td {
+        padding: 14px 16px;
+        border-bottom: 1px solid #f1f5f9;
+        font-size: 13px;
+        color: #0f172a;
+        vertical-align: middle;
+      }
+
+      tr:hover td {
+        background-color: #fafbfd;
+      }
+
+      .user-cell {
+        display: flex;
+        align-items: center;
+        gap: 10px;
+
+        .avatar-sm {
+          width: 32px;
+          height: 32px;
+          border-radius: 50%;
+          color: #ffffff;
+          display: flex;
+          align-items: center;
+          justify-content: center;
+          font-size: 11px;
+          font-weight: 700;
+          flex-shrink: 0;
+        }
+
+        .user-info {
+          display: flex;
+          flex-direction: column;
+
+          .user-name {
+            font-weight: 700;
+            color: #0f172a;
+            line-height: 1.25;
+          }
+
+          .user-sub {
+            font-size: 11px;
+            color: #64748b;
+          }
+        }
+      }
+
+      .role-badge {
+        display: inline-flex;
+        padding: 2px 8px;
+        border-radius: 4px;
+        font-size: 11px;
+        font-weight: 700;
+        background-color: #f1f5f9;
+        color: #475569;
+
+        &.role-mgr {
+          background-color: #e0e7ff;
+          color: #4338ca;
+        }
+      }
+
+      .test-title-cell {
+        .test-name {
+          font-size: 13px;
+          font-weight: 600;
+          color: #0f172a;
+          line-height: 1.3;
+        }
+      }
+
+      .progress-cell {
+        width: 110px;
+
+        .progress-text-row {
+          font-size: 11px;
+          font-weight: 700;
+          color: #475569;
+          margin-bottom: 3px;
+        }
+
+        .bar-track-mini {
+          height: 5px;
+          background-color: #e2e8f0;
+          border-radius: 9999px;
+          overflow: hidden;
+
+          .bar-fill-mini {
+            height: 100%;
+            background-color: #3b82f6;
+            border-radius: 9999px;
+            transition: width 0.3s ease;
+
+            &.bar-done {
+              background-color: #00a859;
+            }
+          }
+        }
+      }
+
+      .score-pill-tag {
+        display: inline-flex;
+        align-items: center;
+        gap: 5px;
+        padding: 3px 9px;
+        border-radius: 6px;
+        font-size: 12px;
+        font-weight: 700;
+        background-color: #f1f5f9;
+        color: #475569;
+
+        &.score-high {
+          background-color: #ecfdf5;
+          color: #059669;
+          border: 1px solid #a7f3d0;
+        }
+
+        &.score-mid {
+          background-color: #fffbeb;
+          color: #d97706;
+          border: 1px solid #fde68a;
+        }
+      }
+
+      .score-pill-placeholder {
+        font-size: 12px;
+        color: #94a3b8;
+        font-style: italic;
+      }
+
+      .status-pill-grade {
+        display: inline-flex;
+        align-items: center;
+        gap: 5px;
+        padding: 3px 8px;
+        border-radius: 6px;
+        font-size: 11px;
+        font-weight: 700;
+
+        &.st-done {
+          background-color: #ecfdf5;
+          color: #059669;
+        }
+
+        &.st-progress {
+          background-color: #eff6ff;
+          color: #2563eb;
+        }
+
+        &.st-empty {
+          background-color: #f1f5f9;
+          color: #94a3b8;
+        }
+      }
+
+      .btn-job-remind {
+        display: inline-flex;
+        align-items: center;
+        gap: 5px;
+        padding: 5px 12px;
+        border-radius: 6px;
+        font-size: 12px;
+        font-weight: 600;
+        background-color: #ffffff;
+        border: 1px solid #cbd5e1;
+        color: #475569;
+        cursor: pointer;
+        transition: all 0.15s ease;
+
+        &:hover:not(:disabled) {
+          background-color: #eff6ff;
+          border-color: #93c5fd;
+          color: #2563eb;
+        }
+
+        &:disabled {
+          opacity: 0.5;
+          cursor: not-allowed;
+        }
+      }
+    }
+
+    .empty-gradebook-box {
+      padding: 48px 16px;
+      text-align: center;
+      color: #94a3b8;
+
+      p {
+        margin: 8px 0 0 0;
+        font-size: 13px;
+      }
+    }
+  }
+
+  @media (max-width: 768px) {
+    .gradebook-toolbar {
+      flex-direction: column;
+      align-items: stretch;
+
+      .search-box input {
+        width: 100%;
+      }
+
+      .filter-controls {
+        flex-direction: column;
+
+        .filter-item .filter-select {
+          width: 100%;
+        }
+      }
+    }
+  }
+}
+
 /* ========================================================
    MODAL: INTERACTIVE LEARNING & TESTING
    ======================================================== */
@@ -1363,3 +1848,77 @@
     transform: rotate(360deg);
   }
 }
+
+/* ========================================================
+   MOBILE RESPONSIVE STYLES (≤ 768px)
+   ======================================================== */
+@media (max-width: 768px) {
+  .academy-page {
+    padding: 10px 0;
+  }
+
+  .academy-top-bar {
+    flex-direction: column;
+    align-items: stretch;
+    gap: 12px;
+
+    .page-title-group .page-title {
+      font-size: 20px;
+    }
+
+    .bar-right {
+      width: 100%;
+
+      .user-role-pill {
+        width: 100%;
+        justify-content: center;
+      }
+    }
+  }
+
+  .track-navigation-tabs {
+    grid-template-columns: 1fr;
+    gap: 10px;
+
+    .track-tab-btn {
+      padding: 12px 14px;
+      gap: 12px;
+    }
+  }
+
+  .courses-grid {
+    grid-template-columns: 1fr !important;
+    gap: 12px;
+  }
+
+  /* Modals on Mobile */
+  .lesson-detail-modal,
+  .quiz-modal {
+    width: 96% !important;
+    max-width: 96% !important;
+    max-height: 94vh;
+    border-radius: 10px;
+
+    .modal-header {
+      padding: 14px 16px;
+
+      h3 { font-size: 15px; }
+    }
+
+    .modal-body {
+      padding: 14px 16px;
+    }
+
+    .modal-footer {
+      padding: 12px 16px;
+      flex-direction: column-reverse;
+      gap: 8px;
+
+      button {
+        width: 100%;
+        justify-content: center;
+      }
+    }
+  }
+}
+

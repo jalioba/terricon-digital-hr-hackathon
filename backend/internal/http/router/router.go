@@ -116,7 +116,7 @@ func NewRouter(cfg config.Config, q *db.Queries, zup zup1c.Client, doc documento
 				hrGroup.Post("/hr/employees", hrH.CreateEmployee)
 				hrGroup.Get("/hr/employees", hrH.ListEmployees)
 				hrGroup.Delete("/hr/employees/{id}", hrH.DeleteEmployee)
-				hrGroup.Get("/hr/analytics", hrH.GetAnalytics)
+				hrGroup.Get("/hr/analytics", analyH.GetAnalytics)
 			})
 		})
 	})

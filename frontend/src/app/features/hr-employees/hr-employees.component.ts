@@ -247,7 +247,7 @@ export class HrEmployeesComponent implements OnInit {
 
         if (err?.status === 403 || serverError.includes('insufficient role permissions')) {
           this.modalError.set(
-            'Недостаточно прав (403 Forbidden). Текущий аккаунт не имеет прав HR или Руководителя. Войдите под учетной записью HR-директора (ИИН 880101300555, пароль JanaMen2026!).'
+            'Недостаточно прав (403 Forbidden). Текущий аккаунт не имеет прав HR или Руководителя. Войдите под учетной записью HR-директора (ИИН 880101300555).'
           );
         } else if (err?.status === 409 || serverError.includes('уже зарегистрирован') || serverError.includes('duplicate')) {
           this.modalError.set('Сотрудник с таким ИИН уже зарегистрирован в системе.');

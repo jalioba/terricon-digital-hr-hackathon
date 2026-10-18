@@ -30,7 +30,7 @@ func main() {
 	}
 
 	var queries *db.Queries
-	pool, err := database.ConnectAndBootstrap(ctx, cfg.DatabaseURL, cfg.AutoSeed)
+	pool, err := database.ConnectAndBootstrap(ctx, cfg.DatabaseURL, cfg.AutoSeed, cfg.PasswordHR)
 	if err != nil {
 		log.Printf("ERROR: Database connection failed: %v", err)
 		log.Println("Please verify your DATABASE_URL in .env.")

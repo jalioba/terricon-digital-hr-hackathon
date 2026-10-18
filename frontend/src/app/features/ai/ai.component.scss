@@ -749,9 +749,9 @@
 /* Responsive tweaks */
 @media (max-width: 768px) {
   .ai-container {
-    height: calc(100vh - 80px);
-    border-radius: 0;
-    border: none;
+    height: calc(100vh - 135px);
+    border-radius: 10px;
+    border: 1px solid #e2e8f0;
   }
 
   .chat-bubble-row {
@@ -759,10 +759,31 @@
   }
 
   .ai-header {
-    padding: 12px 16px;
+    padding: 10px 14px;
+
+    .ai-header-info .ai-title {
+      font-size: 15px;
+    }
   }
 
   .ai-footer {
-    padding: 12px 16px;
+    padding: 10px 12px;
+
+    .suggestions-row {
+      overflow-x: auto;
+      -webkit-overflow-scrolling: touch;
+      scrollbar-width: none;
+      flex-wrap: nowrap;
+      padding-bottom: 4px;
+
+      &::-webkit-scrollbar {
+        display: none;
+      }
+
+      .btn-quick-chip {
+        white-space: nowrap;
+        flex-shrink: 0;
+      }
+    }
   }
 }

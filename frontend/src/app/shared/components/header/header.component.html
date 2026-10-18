@@ -1,11 +1,11 @@
-<header class="header-container" *ngIf="authService.isLoggedIn()">
+<header class="header-container" *ngIf="isVisible()">
   <div class="header-capsule">
     <!-- Brand Logo -->
-    <a routerLink="/" class="header-brand" title="JAŃA MEN — JanaPost HR">
+    <a routerLink="/" class="header-brand" title="JAŃA MEN — JanaPost HR" (click)="closeMobileDrawer()">
       <img src="/JanaMen.svg" alt="JAŃA MEN" class="brand-logo-img" />
     </a>
 
-    <!-- Navigation Bar -->
+    <!-- Desktop Navigation Bar -->
     <nav class="header-nav" data-tour="header-nav">
       <!-- HR Manager Tabs -->
       <ng-container *ngIf="authService.isHr()">
@@ -46,6 +46,9 @@
         <a routerLink="/ai" routerLinkActive="active" class="nav-link">
           {{ i18n.t('nav.ai') }}
         </a>
+        <a routerLink="/hr/analytics" routerLinkActive="active" class="nav-link">
+          {{ i18n.t('nav.analytics') }}
+        </a>
       </ng-container>
 
       <!-- Employee Tabs -->
@@ -67,7 +70,7 @@
 
     <!-- Header Actions -->
     <div class="header-actions" data-tour="header-actions">
-      <!-- Role indicator badge and user name -->
+      <!-- Role indicator badge and user name (Desktop / Tablet) -->
       <div class="header-role-badge" *ngIf="authService.currentUser() as user">
         <span class="badge badge-green" *ngIf="user.role === 'hr'">HR-директор</span>
         <span class="badge badge-blue" *ngIf="user.role === 'manager'">Руководитель</span>
@@ -146,7 +149,7 @@
         </div>
       </div>
 
-      <!-- User Profile Avatar & Dropdown -->
+      <!-- User Profile Avatar & Dropdown (Desktop / Tablet) -->
       <div class="profile-dropdown-wrapper">
         <button
           type="button"
@@ -182,6 +185,181 @@
           </button>
         </div>
       </div>
+
+      <!-- Mobile Hamburger Button -->
+      <button
+        type="button"
+        class="mobile-menu-btn"
+        (click)="toggleMobileDrawer()"
+        title="Главное меню"
+      >
+        <app-icon [name]="isMobileDrawerOpen() ? 'x' : 'menu'" [size]="22"></app-icon>
+      </button>
     </div>
   </div>
+
+  <!-- Mobile Drawer Backdrop -->
+  <div
+    class="mobile-drawer-backdrop"
+    *ngIf="isMobileDrawerOpen()"
+    (click)="closeMobileDrawer()"
+  ></div>
+
+  <!-- Mobile Slide-out Drawer -->
+  <aside class="mobile-drawer" [class.open]="isMobileDrawerOpen()">
+    <div class="drawer-header">
+      <div class="drawer-brand">
+        <img src="/JanaMen.svg" alt="JAŃA MEN" class="drawer-logo" />
+      </div>
+      <button type="button" class="btn-drawer-close" (click)="closeMobileDrawer()">
+        ✕
+      </button>
+    </div>
+
+    <!-- User Profile Card in Drawer -->
+    <div class="drawer-user-card" *ngIf="authService.currentUser() as user">
+      <div class="drawer-user-avatar">
+        <app-icon name="user" [size]="22"></app-icon>
+      </div>
+      <div class="drawer-user-details">
+        <div class="drawer-user-name">{{ user.full_name }}</div>
+        <div class="drawer-user-role-line">
+          <span class="badge badge-green" *ngIf="user.role === 'hr'">HR-директор</span>
+          <span class="badge badge-blue" *ngIf="user.role === 'manager'">Руководитель</span>
+          <span class="badge badge-amber" *ngIf="user.role === 'employee'">Работник</span>
+          <span class="dept-tag" *ngIf="user.dept_ru">{{ user.dept_ru }}</span>
+        </div>
+      </div>
+    </div>
+
+    <!-- Drawer Navigation Links -->
+    <nav class="drawer-nav">
+      <!-- HR Links -->
+      <ng-container *ngIf="authService.isHr()">
+        <a routerLink="/hr/employees" routerLinkActive="active" class="drawer-nav-link" (click)="closeMobileDrawer()">
+          <app-icon name="users" [size]="18"></app-icon>
+          <span>{{ i18n.t('nav.employees') }}</span>
+        </a>
+        <a routerLink="/tasks" routerLinkActive="active" class="drawer-nav-link" (click)="closeMobileDrawer()">
+          <app-icon name="check-square" [size]="18"></app-icon>
+          <span>{{ i18n.t('nav.tasks') }}</span>
+        </a>
+        <a routerLink="/requests" routerLinkActive="active" class="drawer-nav-link" (click)="closeMobileDrawer()">
+          <app-icon name="file-text" [size]="18"></app-icon>
+          <span>{{ i18n.t('nav.requests') }}</span>
+        </a>
+        <a routerLink="/academy" routerLinkActive="active" class="drawer-nav-link" (click)="closeMobileDrawer()">
+          <app-icon name="graduation-cap" [size]="18"></app-icon>
+          <span>{{ i18n.t('nav.academy') }}</span>
+        </a>
+        <a routerLink="/ai" routerLinkActive="active" class="drawer-nav-link" (click)="closeMobileDrawer()">
+          <app-icon name="bot" [size]="18"></app-icon>
+          <span>{{ i18n.t('nav.ai') }}</span>
+        </a>
+        <a routerLink="/hr/analytics" routerLinkActive="active" class="drawer-nav-link" (click)="closeMobileDrawer()">
+          <app-icon name="bar-chart" [size]="18"></app-icon>
+          <span>{{ i18n.t('nav.analytics') }}</span>
+        </a>
+      </ng-container>
+
+      <!-- Manager Links -->
+      <ng-container *ngIf="authService.isManager()">
+        <a routerLink="/hr/employees" routerLinkActive="active" class="drawer-nav-link" (click)="closeMobileDrawer()">
+          <app-icon name="users" [size]="18"></app-icon>
+          <span>{{ i18n.t('nav.employees') }}</span>
+        </a>
+        <a routerLink="/tasks" routerLinkActive="active" class="drawer-nav-link" (click)="closeMobileDrawer()">
+          <app-icon name="check-square" [size]="18"></app-icon>
+          <span>{{ i18n.t('nav.tasks') }}</span>
+        </a>
+        <a routerLink="/requests" routerLinkActive="active" class="drawer-nav-link" (click)="closeMobileDrawer()">
+          <app-icon name="file-text" [size]="18"></app-icon>
+          <span>{{ i18n.t('nav.requests') }}</span>
+        </a>
+        <a routerLink="/academy" routerLinkActive="active" class="drawer-nav-link" (click)="closeMobileDrawer()">
+          <app-icon name="graduation-cap" [size]="18"></app-icon>
+          <span>{{ i18n.t('nav.academy') }}</span>
+        </a>
+        <a routerLink="/ai" routerLinkActive="active" class="drawer-nav-link" (click)="closeMobileDrawer()">
+          <app-icon name="bot" [size]="18"></app-icon>
+          <span>{{ i18n.t('nav.ai') }}</span>
+        </a>
+        <a routerLink="/hr/analytics" routerLinkActive="active" class="drawer-nav-link" (click)="closeMobileDrawer()">
+          <app-icon name="bar-chart" [size]="18"></app-icon>
+          <span>{{ i18n.t('nav.analytics') }}</span>
+        </a>
+      </ng-container>
+
+      <!-- Employee Links -->
+      <ng-container *ngIf="authService.isEmployee()">
+        <a routerLink="/tasks" routerLinkActive="active" class="drawer-nav-link" (click)="closeMobileDrawer()">
+          <app-icon name="check-square" [size]="18"></app-icon>
+          <span>{{ i18n.t('nav.tasks') }}</span>
+        </a>
+        <a routerLink="/requests" routerLinkActive="active" class="drawer-nav-link" (click)="closeMobileDrawer()">
+          <app-icon name="file-text" [size]="18"></app-icon>
+          <span>{{ i18n.t('nav.requests') }}</span>
+        </a>
+        <a routerLink="/academy" routerLinkActive="active" class="drawer-nav-link" (click)="closeMobileDrawer()">
+          <app-icon name="graduation-cap" [size]="18"></app-icon>
+          <span>{{ i18n.t('nav.academy') }}</span>
+        </a>
+        <a routerLink="/ai" routerLinkActive="active" class="drawer-nav-link" (click)="closeMobileDrawer()">
+          <app-icon name="bot" [size]="18"></app-icon>
+          <span>{{ i18n.t('nav.ai') }}</span>
+        </a>
+      </ng-container>
+    </nav>
+
+    <!-- Drawer Footer Actions -->
+    <div class="drawer-footer">
+      <button type="button" class="drawer-footer-btn" (click)="openProfile(); closeMobileDrawer()">
+        <app-icon name="user" [size]="18"></app-icon>
+        <span>Мой профиль</span>
+      </button>
+
+      <button type="button" class="drawer-footer-btn text-danger" (click)="logout(); closeMobileDrawer()">
+        <app-icon name="log-out" [size]="18"></app-icon>
+        <span>{{ i18n.t('app.logout') }}</span>
+      </button>
+    </div>
+  </aside>
 </header>
+
+<!-- Mobile Bottom Navigation Bar (Fixed bottom for phone screens <= 768px) -->
+<nav class="mobile-bottom-nav" *ngIf="isVisible()">
+  <!-- Tasks -->
+  <a routerLink="/tasks" routerLinkActive="active" class="mobile-bottom-link">
+    <app-icon name="check-square" [size]="20"></app-icon>
+    <span class="link-text">{{ i18n.t('nav.tasks') }}</span>
+  </a>
+
+  <!-- Requests -->
+  <a routerLink="/requests" routerLinkActive="active" class="mobile-bottom-link">
+    <app-icon name="file-text" [size]="20"></app-icon>
+    <span class="link-text">{{ i18n.t('nav.requests') }}</span>
+  </a>
+
+  <!-- Academy -->
+  <a routerLink="/academy" routerLinkActive="active" class="mobile-bottom-link">
+    <app-icon name="graduation-cap" [size]="20"></app-icon>
+    <span class="link-text">{{ i18n.t('nav.academy') }}</span>
+  </a>
+
+  <!-- AI Jana -->
+  <a routerLink="/ai" routerLinkActive="active" class="mobile-bottom-link">
+    <app-icon name="bot" [size]="20"></app-icon>
+    <span class="link-text">{{ i18n.t('nav.ai') }}</span>
+  </a>
+
+  <!-- Analytics (HR / Manager) OR Profile (Employee) -->
+  <a *ngIf="authService.isHr() || authService.isManager()" routerLink="/hr/analytics" routerLinkActive="active" class="mobile-bottom-link">
+    <app-icon name="bar-chart" [size]="20"></app-icon>
+    <span class="link-text">{{ i18n.t('nav.analytics') }}</span>
+  </a>
+
+  <a *ngIf="authService.isEmployee()" routerLink="/profile" routerLinkActive="active" class="mobile-bottom-link">
+    <app-icon name="user" [size]="20"></app-icon>
+    <span class="link-text">Профиль</span>
+  </a>
+</nav>

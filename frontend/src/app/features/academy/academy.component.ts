@@ -39,6 +39,16 @@ export interface QuizQuestion {
   options_kz: string[];
 }
 
+export interface UserCourseTest {
+  course_id: number;
+  title_ru: string;
+  title_kz: string;
+  track: 'platform' | 'job';
+  status: 'not_started' | 'in_progress' | 'completed';
+  progress: number;
+  score?: number | null;
+}
+
 export interface HrOversightUser {
   user_id: number;
   full_name: string;
@@ -51,6 +61,7 @@ export interface HrOversightUser {
   avg_progress: number;
   platform_completed: number;
   platform_score: number;
+  courses?: UserCourseTest[];
 }
 
 @Component({
@@ -75,12 +86,14 @@ export class AcademyComponent implements OnInit {
   isLoading = signal<boolean>(false);
   actionSuccess = signal<string>('');
   actionError = signal<string>('');
+  sendingReminderUserId = signal<number | null>(null);
 
   // Role getters
   currentUser = computed(() => this.authService.currentUser());
   isHr = computed(() => this.authService.isHr());
   isManager = computed(() => this.authService.isManager());
   isEmployee = computed(() => this.authService.isEmployee());
+  canViewOversight = computed(() => this.isHr() || this.isManager());
 
   // Platform Course (Track 1) for Employee / Manager
   platformCourse = computed(() => {
@@ -97,19 +110,19 @@ export class AcademyComponent implements OnInit {
   hrFilterRole = signal<string>('all');
   hrSearch = signal<string>('');
 
-  // HR Job Catalog Filters (Track 2)
+  // Part 2: Catalog Explorer Filters (Top of Part 2)
   hrSelectedJobDept = signal<number>(1);
   hrSelectedJobRole = signal<'employee' | 'manager'>('employee');
 
   hrJobCourses = computed(() => {
-    const deptId = this.hrSelectedJobDept();
+    const deptId = this.isManager() ? (this.currentUser()?.department_id || this.hrSelectedJobDept()) : this.hrSelectedJobDept();
     const role = this.hrSelectedJobRole();
     return this.courses().filter(
       (c) => c.track === 'job' && (c.department_id === deptId || !c.department_id) && (c.target_role === role || c.target_role === 'all')
     );
   });
 
-  // Filtered HR Oversight list
+  // Filtered HR Oversight list (Track 1)
   filteredHrUsers = computed(() => {
     let list = this.hrUsers();
     const dept = this.hrFilterDept();
@@ -133,7 +146,7 @@ export class AcademyComponent implements OnInit {
     return list;
   });
 
-  // HR Metrics Stats
+  // HR Metrics Stats (Track 1)
   hrStats = computed(() => {
     const all = this.hrUsers();
     const total = all.length;
@@ -142,6 +155,99 @@ export class AcademyComponent implements OnInit {
     const notStarted = total - completed - inProgress;
     const percent = total > 0 ? Math.round((completed / total) * 100) : 0;
     return { total, completed, inProgress, notStarted, percent };
+  });
+
+  // Part 2: Gradebook Filters & Search (Bottom of Part 2)
+  jobLearnerSearch = signal<string>('');
+  jobLearnerDeptFilter = signal<string>('all');
+  jobLearnerRoleFilter = signal<string>('all');
+  jobLearnerStatusFilter = signal<string>('all');
+
+  // Filtered Part 2 Gradebook list (Department employees & managers)
+  jobTrackLearners = computed(() => {
+    let list = this.hrUsers();
+
+    // Department filter
+    const dept = this.jobLearnerDeptFilter();
+    if (dept !== 'all') {
+      const dId = Number(dept);
+      list = list.filter((u) => u.department_id === dId);
+    } else if (this.isManager()) {
+      const mgrDept = this.currentUser()?.department_id;
+      if (mgrDept) {
+        list = list.filter((u) => u.department_id === mgrDept);
+      }
+    }
+
+    // Role filter
+    const r = this.jobLearnerRoleFilter();
+    if (r !== 'all') {
+      list = list.filter((u) => u.role === r);
+    }
+
+    // Status filter
+    const st = this.jobLearnerStatusFilter();
+    if (st !== 'all') {
+      list = list.filter((u) => {
+        const jCourses = (u.courses || []).filter((c) => c.track === 'job');
+        if (jCourses.length === 0) return st === 'not_started';
+        const hasCompleted = jCourses.some((c) => c.progress >= 100 || (c.score !== null && c.score !== undefined && c.score >= 70));
+        const hasProgress = jCourses.some((c) => c.progress > 0 && c.progress < 100);
+        if (st === 'completed') return hasCompleted;
+        if (st === 'in_progress') return !hasCompleted && hasProgress;
+        if (st === 'not_started') return !hasCompleted && !hasProgress;
+        return true;
+      });
+    }
+
+    // Text search query
+    const q = this.jobLearnerSearch().trim().toLowerCase();
+    if (q) {
+      list = list.filter(
+        (u) =>
+          u.full_name.toLowerCase().includes(q) ||
+          u.position.toLowerCase().includes(q) ||
+          u.dept_ru.toLowerCase().includes(q)
+      );
+    }
+
+    return list;
+  });
+
+  // Part 2 Gradebook KPI Summary Stats
+  jobTrackStats = computed(() => {
+    const list = this.jobTrackLearners();
+    const total = list.length;
+    let completedCount = 0;
+    let inProgressCount = 0;
+    let notStartedCount = 0;
+    let totalScoreSum = 0;
+    let scoredTestsCount = 0;
+
+    for (const u of list) {
+      const jCourses = (u.courses || []).filter((c) => c.track === 'job');
+      if (jCourses.length === 0) {
+        notStartedCount++;
+        continue;
+      }
+      const hasDone = jCourses.some((c) => c.progress >= 100 || (c.score !== null && c.score !== undefined && c.score >= 70));
+      const hasProg = jCourses.some((c) => c.progress > 0 && c.progress < 100);
+      if (hasDone) completedCount++;
+      else if (hasProg) inProgressCount++;
+      else notStartedCount++;
+
+      for (const c of jCourses) {
+        if (c.score !== null && c.score !== undefined) {
+          totalScoreSum += c.score;
+          scoredTestsCount++;
+        }
+      }
+    }
+
+    const avgScore = scoredTestsCount > 0 ? Math.round(totalScoreSum / scoredTestsCount) : 0;
+    const percentCompleted = total > 0 ? Math.round((completedCount / total) * 100) : 0;
+
+    return { total, completedCount, inProgressCount, notStartedCount, avgScore, percentCompleted };
   });
 
   // Interactive Lesson & Quiz Modal State
@@ -230,8 +336,8 @@ export class AcademyComponent implements OnInit {
       }
     });
 
-    // 2. If HR, load company onboarding oversight
-    if (this.isHr()) {
+    // 2. If HR or Manager, load company onboarding oversight
+    if (this.canViewOversight()) {
       this.api.get<HrOversightUser[]>('/courses/hr-oversight').subscribe({
         next: (data) => this.hrUsers.set(data || []),
         error: (err) => console.error('Failed to load HR oversight data', err)
@@ -381,18 +487,59 @@ export class AcademyComponent implements OnInit {
     });
   }
 
-  // --- HR Oversight Reminder ---
+  // --- Reminders & Helpers ---
   sendReminder(user: HrOversightUser): void {
     const message = `Уважаемый(ая) ${user.full_name}! Напоминаем о необходимости пройти обязательное обучение по функционалу платформы JanaMen в Jana Academy.`;
+    this.sendingReminderUserId.set(user.user_id);
     this.api.post('/courses/remind', { user_id: user.user_id, message }).subscribe({
       next: () => {
+        this.sendingReminderUserId.set(null);
         this.actionSuccess.set(`Напоминание успешно отправлено сотруднику ${user.full_name}`);
         setTimeout(() => this.actionSuccess.set(''), 4000);
       },
       error: (err) => {
+        this.sendingReminderUserId.set(null);
         console.error('Failed to send reminder', err);
         this.actionError.set('Не удалось отправить напоминание');
       }
     });
+  }
+
+  sendJobReminder(user: HrOversightUser, testTitle?: string): void {
+    const courseSuffix = testTitle ? ` по направлению «${testTitle}»` : '';
+    const message = `Уважаемый(ая) ${user.full_name}! Напоминаем о необходимости завершить профессиональное тестирование${courseSuffix} в Jana Academy.`;
+    this.sendingReminderUserId.set(user.user_id);
+    this.api.post('/courses/remind', { user_id: user.user_id, message }).subscribe({
+      next: () => {
+        this.sendingReminderUserId.set(null);
+        this.actionSuccess.set(`Напоминание по тестированию отправлено: ${user.full_name}`);
+        setTimeout(() => this.actionSuccess.set(''), 4000);
+      },
+      error: (err) => {
+        this.sendingReminderUserId.set(null);
+        console.error('Failed to send job reminder', err);
+        this.actionError.set('Не удалось отправить напоминание');
+      }
+    });
+  }
+
+  getJobCourses(u: HrOversightUser): UserCourseTest[] {
+    return (u.courses || []).filter((c) => c.track === 'job');
+  }
+
+  getAvatarColor(name: string): string {
+    const colors = ['#3b82f6', '#10b981', '#8b5cf6', '#f59e0b', '#ec4899', '#06b6d4', '#6366f1'];
+    let hash = 0;
+    for (let i = 0; i < name.length; i++) {
+      hash = name.charCodeAt(i) + ((hash << 5) - hash);
+    }
+    return colors[Math.abs(hash) % colors.length];
+  }
+
+  getInitials(name: string): string {
+    if (!name) return '??';
+    const parts = name.trim().split(/\s+/);
+    if (parts.length === 1) return parts[0].substring(0, 2).toUpperCase();
+    return (parts[0][0] + parts[1][0]).toUpperCase();
   }
 }

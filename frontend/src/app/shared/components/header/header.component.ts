@@ -21,9 +21,11 @@ export class HeaderComponent implements OnInit {
 
   isProfileMenuOpen = signal<boolean>(false);
   isNotificationsOpen = signal<boolean>(false);
+  isMobileDrawerOpen = signal<boolean>(false);
 
   unreadCount = computed(() => this.notificationService.unreadCount());
   notifications = computed(() => this.notificationService.notifications());
+  isVisible = computed(() => this.authService.isLoggedIn() && !this.router.url.startsWith('/login'));
 
   ngOnInit(): void {
     if (this.authService.isLoggedIn()) {
@@ -44,6 +46,18 @@ export class HeaderComponent implements OnInit {
       this.isProfileMenuOpen.set(false);
       this.notificationService.loadNotifications();
     }
+  }
+
+  toggleMobileDrawer(): void {
+    this.isMobileDrawerOpen.update((v) => !v);
+    if (this.isMobileDrawerOpen()) {
+      this.isProfileMenuOpen.set(false);
+      this.isNotificationsOpen.set(false);
+    }
+  }
+
+  closeMobileDrawer(): void {
+    this.isMobileDrawerOpen.set(false);
   }
 
   closeNotifications(): void {

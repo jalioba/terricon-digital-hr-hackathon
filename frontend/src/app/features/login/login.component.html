@@ -28,7 +28,7 @@
             name="iin"
             maxlength="12"
             [(ngModel)]="iin"
-            placeholder="880101300555"
+            placeholder="Введите 12-значный ИИН"
             required
             autocomplete="username"
             [disabled]="isLoading()"
@@ -75,39 +75,6 @@
         <span *ngIf="isLoading()">Авторизация в системе...</span>
       </button>
     </form>
-
-    <!-- Quick Demo Accounts for Testing (No emojis, clean corporate layout) -->
-    <div class="quick-test-section">
-      <div class="quick-title">Быстрый вход для проверки ролей:</div>
-      <div class="quick-buttons-grid">
-        <button
-          type="button"
-          class="quick-btn"
-          (click)="fillCredentials('880101300555', 'JanaMen2026!')"
-        >
-          <span class="quick-role">Сатпаева Айгерим (HR-директор — Управление персоналом)</span>
-          <span class="quick-iin">880101300555</span>
-        </button>
-
-        <button
-          type="button"
-          class="quick-btn"
-          (click)="fillCredentials('900101300111', 'JanaMen2026!')"
-        >
-          <span class="quick-role">Нурланов Ерлан (Руководитель отдела поставок)</span>
-          <span class="quick-iin">900101300111</span>
-        </button>
-
-        <button
-          type="button"
-          class="quick-btn"
-          (click)="fillCredentials('020101343200', 'JanaMen2026!')"
-        >
-          <span class="quick-role">Бекова Алия (Работник — Личный кабинет)</span>
-          <span class="quick-iin">020101343200</span>
-        </button>
-      </div>
-    </div>
 
     <!-- Language Toggle Link -->
     <div class="login-footer-lang">

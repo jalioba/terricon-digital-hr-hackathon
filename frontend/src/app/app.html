@@ -1,5 +1,5 @@
-<app-header *ngIf="authService.isLoggedIn()"></app-header>
-<main [class.content-authenticated]="authService.isLoggedIn()" [class.content-public]="!authService.isLoggedIn()">
+<app-header *ngIf="showAppHeader()"></app-header>
+<main [class.content-authenticated]="showAppHeader()" [class.content-public]="!showAppHeader()">
   <router-outlet></router-outlet>
 </main>
-<app-spotlight-tour></app-spotlight-tour>
+<app-spotlight-tour *ngIf="showAppHeader()"></app-spotlight-tour>

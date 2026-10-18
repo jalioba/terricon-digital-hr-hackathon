@@ -7,9 +7,9 @@ import { Observable } from 'rxjs';
 })
 export class ApiService {
   private http = inject(HttpClient);
-  private baseUrl = typeof window !== 'undefined' && window.location.hostname !== 'localhost'
+  private baseUrl = typeof window !== 'undefined' && window.location.hostname !== 'localhost' && window.location.hostname !== '127.0.0.1'
     ? 'https://janamen-backend-yihgnr1vjc-uc.a.run.app/api'
-    : 'http://localhost:8080/api';
+    : (typeof window !== 'undefined' ? `http://${window.location.hostname}:8080/api` : 'http://localhost:8080/api');
 
   setBaseUrl(url: string): void {
     this.baseUrl = url;

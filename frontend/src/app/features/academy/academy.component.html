@@ -290,8 +290,8 @@
        TRACK 2: ЗАДАЧИ РАБОТЫ (Job & Department Training)
        ======================================================== -->
   <div class="track-content" *ngIf="!isLoading() && activeTrack() === 'job'">
-    <!-- EMPLOYEE & MANAGER VIEW -->
-    <ng-container *ngIf="!isHr()">
+    <!-- 1. EMPLOYEE VIEW (Personal assigned job courses) -->
+    <ng-container *ngIf="isEmployee()">
       <div class="job-track-header">
         <div class="dept-specialization-pill">
           <app-icon name="book-open" [size]="15"></app-icon>
@@ -340,88 +340,318 @@
       </div>
     </ng-container>
 
-    <!-- HR VIEW: CATALOG EXPLORER BY DEPARTMENT AND ROLE -->
-    <ng-container *ngIf="isHr()">
-      <div class="hr-catalog-controls">
-        <div class="catalog-filters">
-          <div class="catalog-filter-item">
-            <label class="filter-label">Выберите подразделение:</label>
-            <div class="dept-selector-buttons">
-              <button
-                type="button"
-                class="dept-btn"
-                [class.active]="hrSelectedJobDept() === 1"
-                (click)="hrSelectedJobDept.set(1)"
-              >
-                Отдел поставок заказов
-              </button>
-              <button
-                type="button"
-                class="dept-btn"
-                [class.active]="hrSelectedJobDept() === 2"
-                (click)="hrSelectedJobDept.set(2)"
-              >
-                Отдел логистики и склада
-              </button>
-              <button
-                type="button"
-                class="dept-btn"
-                [class.active]="hrSelectedJobDept() === 3"
-                (click)="hrSelectedJobDept.set(3)"
-              >
-                Отдел IT и поддержки
-              </button>
+    <!-- 2. HR & MANAGER VIEW: CONTENT ON TOP + DEPARTMENT GRADEBOOK ON BOTTOM -->
+    <ng-container *ngIf="canViewOversight()">
+      <!-- TOP SECTION: CATALOG & TEST CONTENT -->
+      <div class="job-content-section-top">
+        <div class="section-title-bar">
+          <div class="title-left">
+            <div class="section-pre-pill">
+              <app-icon name="book-open" [size]="13"></app-icon>
+              <span>Содержание тестов и регламентов</span>
+            </div>
+            <h2 class="section-heading">Каталог профессиональных программ и тестов</h2>
+            <p class="section-subtext">
+              Ознакомьтесь с содержанием тестов, материалами и вопросами для каждой должности в подразделениях
+            </p>
+          </div>
+        </div>
+
+        <div class="hr-catalog-controls">
+          <div class="catalog-filters">
+            <!-- Department Filter for HR (or indicator for Manager) -->
+            <div class="catalog-filter-item" *ngIf="isHr()">
+              <label class="filter-label">Выберите подразделение:</label>
+              <div class="dept-selector-buttons">
+                <button
+                  type="button"
+                  class="dept-btn"
+                  [class.active]="hrSelectedJobDept() === 1"
+                  (click)="hrSelectedJobDept.set(1)"
+                >
+                  Отдел поставок заказов
+                </button>
+                <button
+                  type="button"
+                  class="dept-btn"
+                  [class.active]="hrSelectedJobDept() === 2"
+                  (click)="hrSelectedJobDept.set(2)"
+                >
+                  Отдел логистики и склада
+                </button>
+                <button
+                  type="button"
+                  class="dept-btn"
+                  [class.active]="hrSelectedJobDept() === 3"
+                  (click)="hrSelectedJobDept.set(3)"
+                >
+                  Отдел IT и поддержки
+                </button>
+              </div>
+            </div>
+
+            <div class="catalog-filter-item" *ngIf="isManager()">
+              <label class="filter-label">Ваше подразделение:</label>
+              <div class="dept-badge-fixed">
+                <app-icon name="shield" [size]="14"></app-icon>
+                <span>{{ currentUser()?.dept_ru }}</span>
+              </div>
+            </div>
+
+            <!-- Role Category Selector -->
+            <div class="catalog-filter-item">
+              <label class="filter-label">Категория сотрудников:</label>
+              <div class="role-selector-buttons">
+                <button
+                  type="button"
+                  class="role-btn"
+                  [class.active]="hrSelectedJobRole() === 'employee'"
+                  (click)="hrSelectedJobRole.set('employee')"
+                >
+                  Работники отдела
+                </button>
+                <button
+                  type="button"
+                  class="role-btn"
+                  [class.active]="hrSelectedJobRole() === 'manager'"
+                  (click)="hrSelectedJobRole.set('manager')"
+                >
+                  Руководители отдела
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <!-- Course Cards Grid (Content Preview) -->
+        <div class="courses-grid">
+          <div class="course-card" *ngFor="let c of hrJobCourses()">
+            <div class="course-card-top">
+              <div class="course-tag-row">
+                <span class="track-badge">
+                  {{ hrSelectedJobRole() === 'manager' ? 'Руководящий состав' : 'Линейный персонал' }}
+                </span>
+                <span class="course-lessons-badge">{{ c.lessons.length }} уроков + Тест</span>
+              </div>
+              <h3 class="course-title">{{ c.title_ru }}</h3>
+              <p class="course-desc">{{ c.description_ru }}</p>
+            </div>
+
+            <div class="course-card-bottom">
+              <div class="card-footer-action">
+                <button
+                  type="button"
+                  class="btn-course-action"
+                  (click)="startCourse(c)"
+                >
+                  <app-icon name="eye" [size]="14"></app-icon>
+                  <span>Просмотреть содержание и тест</span>
+                </button>
+              </div>
             </div>
           </div>
 
-          <div class="catalog-filter-item">
-            <label class="filter-label">Должностная категория:</label>
-            <div class="role-selector-buttons">
-              <button
-                type="button"
-                class="role-btn"
-                [class.active]="hrSelectedJobRole() === 'employee'"
-                (click)="hrSelectedJobRole.set('employee')"
-              >
-                Работники отдела
-              </button>
-              <button
-                type="button"
-                class="role-btn"
-                [class.active]="hrSelectedJobRole() === 'manager'"
-                (click)="hrSelectedJobRole.set('manager')"
-              >
-                Руководители отдела
-              </button>
-            </div>
+          <div *ngIf="hrJobCourses().length === 0" class="no-job-courses-hint">
+            <app-icon name="book-open" [size]="24"></app-icon>
+            <span>В данной категории регламенты формируются</span>
           </div>
         </div>
       </div>
 
-      <div class="courses-grid">
-        <div class="course-card" *ngFor="let c of hrJobCourses()">
-          <div class="course-card-top">
-            <div class="course-tag-row">
-              <span class="track-badge">
-                {{ hrSelectedJobRole() === 'manager' ? 'Руководящий состав' : 'Линейный персонал' }}
-              </span>
-              <span class="course-lessons-badge">{{ c.lessons.length }} уроков</span>
+      <!-- BOTTOM SECTION: DEPARTMENT GRADEBOOK (Сводная ведомость: Баллы сотрудников и руководителей) -->
+      <div class="job-gradebook-section">
+        <div class="gradebook-header-banner">
+          <div class="banner-title-col">
+            <div class="gradebook-badge">
+              <app-icon name="award" [size]="14"></app-icon>
+              <span>Аттестационная ведомость</span>
             </div>
-            <h3 class="course-title">{{ c.title_ru }}</h3>
-            <p class="course-desc">{{ c.description_ru }}</p>
+            <h3 class="gradebook-title">Сводная ведомость: Баллы сотрудников и руководителей</h3>
+            <p class="gradebook-desc">
+              Мониторинг баллов, статусов сдачи профессионального тестирования и процента выполнения тестов по подразделениям
+            </p>
+          </div>
+        </div>
+
+        <!-- Gradebook KPI Summary Cards -->
+        <div class="gradebook-kpi-grid" *ngIf="jobTrackStats() as stats">
+          <div class="gkpi-card">
+            <span class="kpi-label">Всего в ведомости</span>
+            <div class="kpi-value">{{ stats.total }}</div>
+            <span class="kpi-hint">сотрудников и руководителей</span>
           </div>
 
-          <div class="course-card-bottom">
-            <div class="card-footer-action">
-              <button
-                type="button"
-                class="btn-course-action"
-                (click)="startCourse(c)"
-              >
-                <app-icon name="eye" [size]="14"></app-icon>
-                <span>Просмотреть материалы</span>
-              </button>
+          <div class="gkpi-card border-green">
+            <span class="kpi-label">Успешно сдали тест</span>
+            <div class="kpi-value text-green">{{ stats.completedCount }} <small>({{ stats.percentCompleted }}%)</small></div>
+            <span class="kpi-hint">прошли аттестацию</span>
+          </div>
+
+          <div class="gkpi-card border-amber">
+            <span class="kpi-label">Средний балл тестов</span>
+            <div class="kpi-value text-amber">{{ stats.avgScore }} / 100 б.</div>
+            <span class="kpi-hint">качество усвоения</span>
+          </div>
+
+          <div class="gkpi-card border-blue">
+            <span class="kpi-label">В процессе / Не начато</span>
+            <div class="kpi-value text-blue">{{ stats.inProgressCount + stats.notStartedCount }}</div>
+            <span class="kpi-hint">требуют напоминания</span>
+          </div>
+        </div>
+
+        <!-- Filter & Search Toolbar -->
+        <div class="gradebook-toolbar">
+          <div class="search-box">
+            <app-icon name="search" [size]="16" extraClass="search-icon"></app-icon>
+            <input
+              type="text"
+              placeholder="Поиск по ФИО, должности или отделу..."
+              [ngModel]="jobLearnerSearch()"
+              (ngModelChange)="jobLearnerSearch.set($event)"
+            />
+            <button *ngIf="jobLearnerSearch()" class="clear-btn" (click)="jobLearnerSearch.set('')">✕</button>
+          </div>
+
+          <div class="filter-controls">
+            <!-- Dept filter (for HR only; Manager is scoped automatically) -->
+            <div class="filter-item" *ngIf="isHr()">
+              <select [ngModel]="jobLearnerDeptFilter()" (ngModelChange)="jobLearnerDeptFilter.set($event)" class="filter-select">
+                <option value="all">Все отделы компании</option>
+                <option value="1">Отдел поставок заказов</option>
+                <option value="2">Отдел логистики и склада</option>
+                <option value="3">Отдел IT и поддержки</option>
+              </select>
             </div>
+
+            <!-- Role filter -->
+            <div class="filter-item">
+              <select [ngModel]="jobLearnerRoleFilter()" (ngModelChange)="jobLearnerRoleFilter.set($event)" class="filter-select">
+                <option value="all">Все роли</option>
+                <option value="employee">Работники</option>
+                <option value="manager">Руководители</option>
+              </select>
+            </div>
+
+            <!-- Status filter -->
+            <div class="filter-item">
+              <select [ngModel]="jobLearnerStatusFilter()" (ngModelChange)="jobLearnerStatusFilter.set($event)" class="filter-select">
+                <option value="all">Все статусы</option>
+                <option value="completed">Сдали тест</option>
+                <option value="in_progress">В процессе</option>
+                <option value="not_started">Не сдавали</option>
+              </select>
+            </div>
+          </div>
+        </div>
+
+        <!-- Gradebook Table Card -->
+        <div class="gradebook-table-card">
+          <div class="table-responsive">
+            <table class="gradebook-table">
+              <thead>
+                <tr>
+                  <th>Сотрудник / Руководитель</th>
+                  <th>Роль</th>
+                  <th>Назначенный тест регламента</th>
+                  <th>Прогресс</th>
+                  <th>Балл за тест</th>
+                  <th>Статус</th>
+                  <th style="text-align: right;">Действие</th>
+                </tr>
+              </thead>
+              <tbody>
+                <ng-container *ngFor="let u of jobTrackLearners()">
+                  <tr *ngFor="let c of getJobCourses(u); let idx = index">
+                    <td *ngIf="idx === 0" [attr.rowspan]="getJobCourses(u).length">
+                      <div class="user-cell">
+                        <div class="avatar-sm" [style.background-color]="getAvatarColor(u.full_name)">
+                          {{ getInitials(u.full_name) }}
+                        </div>
+                        <div class="user-info">
+                          <span class="user-name">{{ u.full_name }}</span>
+                          <span class="user-sub">{{ u.position }} • {{ u.dept_ru }}</span>
+                        </div>
+                      </div>
+                    </td>
+                    <td *ngIf="idx === 0" [attr.rowspan]="getJobCourses(u).length">
+                      <span class="role-badge" [class.role-mgr]="u.role === 'manager'">
+                        {{ u.role === 'manager' ? 'Руководитель' : 'Работник' }}
+                      </span>
+                    </td>
+                    <td>
+                      <div class="test-title-cell">
+                        <span class="test-name">{{ c.title_ru }}</span>
+                      </div>
+                    </td>
+                    <td>
+                      <div class="progress-cell">
+                        <div class="progress-text-row">
+                          <span>{{ c.progress }}%</span>
+                        </div>
+                        <div class="bar-track-mini">
+                          <div class="bar-fill-mini" [style.width.%]="c.progress" [class.bar-done]="c.progress >= 100"></div>
+                        </div>
+                      </div>
+                    </td>
+                    <td>
+                      <span class="score-pill-tag" *ngIf="c.score !== null && c.score !== undefined" [class.score-high]="c.score >= 80" [class.score-mid]="c.score >= 60 && c.score < 80">
+                        <app-icon name="award" [size]="13"></app-icon>
+                        <span>{{ c.score }} / 100 б.</span>
+                      </span>
+                      <span class="score-pill-placeholder" *ngIf="c.score === null || c.score === undefined">
+                        {{ c.progress >= 100 ? '100% (Зачет)' : (c.progress > 0 ? 'Тест в процессе' : 'Не сдавался') }}
+                      </span>
+                    </td>
+                    <td>
+                      <span class="status-pill-grade" [class.st-done]="c.progress >= 100" [class.st-progress]="c.progress > 0 && c.progress < 100" [class.st-empty]="c.progress === 0">
+                        <app-icon [name]="c.progress >= 100 ? 'check-circle' : (c.progress > 0 ? 'clock' : 'circle')" [size]="13"></app-icon>
+                        <span>{{ c.progress >= 100 ? 'Сдан' : (c.progress > 0 ? 'В процессе' : 'Не сдан') }}</span>
+                      </span>
+                    </td>
+                    <td style="text-align: right;">
+                      <button
+                        type="button"
+                        class="btn-job-remind"
+                        (click)="sendJobReminder(u, c.title_ru)"
+                        [disabled]="sendingReminderUserId() === u.user_id || c.progress >= 100"
+                        title="Отправить напоминание о прохождении теста"
+                      >
+                        <app-icon name="send" [size]="13"></app-icon>
+                        <span>{{ sendingReminderUserId() === u.user_id ? 'Отправка...' : 'Напомнить' }}</span>
+                      </button>
+                    </td>
+                  </tr>
+
+                  <!-- Fallback row if user has no assigned job course yet -->
+                  <tr *ngIf="getJobCourses(u).length === 0">
+                    <td>
+                      <div class="user-cell">
+                        <div class="avatar-sm" [style.background-color]="getAvatarColor(u.full_name)">
+                          {{ getInitials(u.full_name) }}
+                        </div>
+                        <div class="user-info">
+                          <span class="user-name">{{ u.full_name }}</span>
+                          <span class="user-sub">{{ u.position }} • {{ u.dept_ru }}</span>
+                        </div>
+                      </div>
+                    </td>
+                    <td>
+                      <span class="role-badge" [class.role-mgr]="u.role === 'manager'">
+                        {{ u.role === 'manager' ? 'Руководитель' : 'Работник' }}
+                      </span>
+                    </td>
+                    <td colspan="4" class="text-muted" style="font-size: 13px;">Тесты для данной должности формируются</td>
+                    <td style="text-align: right;">—</td>
+                  </tr>
+                </ng-container>
+              </tbody>
+            </table>
+          </div>
+
+          <div *ngIf="jobTrackLearners().length === 0" class="empty-gradebook-box">
+            <app-icon name="search" [size]="32"></app-icon>
+            <p>Сотрудники по выбранным фильтрам не найдены</p>
           </div>
         </div>
       </div>
