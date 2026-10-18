@@ -1,86 +1,283 @@
 <div class="login-page-wrapper">
-  <div class="login-card">
-    <!-- Header -->
-    <div class="login-header">
-      <img src="/JanaMen.svg" alt="JAŃA MEN" class="brand-logo-img" />
-      <h1 class="login-title">{{ i18n.t('app.login') }}</h1>
-      <p class="login-subtitle">{{ i18n.t('app.tagline') }}</p>
-    </div>
+  
+  <!-- Mobile Segmented Tab Switcher (Visible only on screens <= 960px) -->
+  <div class="mobile-segmented-tabs">
+    <button
+      type="button"
+      class="mobile-tab-btn"
+      [class.active]="mobileTab() === 'form'"
+      (click)="setMobileTab('form')"
+    >
+      <app-icon name="log-in" [size]="15"></app-icon>
+      <span>Вход по логину</span>
+    </button>
+    <button
+      type="button"
+      class="mobile-tab-btn"
+      [class.active]="mobileTab() === 'jury'"
+      (click)="setMobileTab('jury')"
+    >
+      <app-icon name="users" [size]="15"></app-icon>
+      <span>Выбор для Жюри (40)</span>
+      <span class="tab-badge">123456</span>
+    </button>
+  </div>
 
-    <!-- Error Alert -->
-    <div class="error-alert" *ngIf="errorMessage()">
-      <app-icon name="alert-triangle" [size]="16"></app-icon>
-      <span>{{ errorMessage() }}</span>
-    </div>
-
-    <!-- Login Form -->
-    <form (ngSubmit)="onSubmit()" #loginForm="ngForm">
-      <!-- IIN Field -->
-      <div class="form-group">
-        <label for="iin">{{ i18n.t('modal.iin_label') }}</label>
-        <div class="input-wrapper">
-          <span class="input-icon-left">
-            <app-icon name="user" [size]="16"></app-icon>
-          </span>
-          <input
-            id="iin"
-            type="text"
-            name="iin"
-            maxlength="12"
-            [(ngModel)]="iin"
-            placeholder="Введите 12-значный ИИН"
-            required
-            autocomplete="username"
-            [disabled]="isLoading()"
-          />
-        </div>
+  <div class="login-layout-container" [class.has-jury-panel]="showJuryPanel()">
+    
+    <!-- Left Column: Standard Login Card -->
+    <div class="login-card" [class.mobile-hidden]="mobileTab() !== 'form'">
+      <!-- Header -->
+      <div class="login-header">
+        <img src="/JanaMen.svg" alt="JAŃA MEN" class="brand-logo-img" />
+        <h1 class="login-title">{{ i18n.t('app.login') }}</h1>
+        <p class="login-subtitle">{{ i18n.t('app.tagline') }}</p>
       </div>
 
-      <!-- Password Field -->
-      <div class="form-group">
-        <label for="password">{{ i18n.t('modal.password_label') }}</label>
-        <div class="input-wrapper">
-          <span class="input-icon-left">
-            <app-icon name="shield" [size]="16"></app-icon>
-          </span>
-          <input
-            id="password"
-            [type]="showPassword() ? 'text' : 'password'"
-            name="password"
-            [(ngModel)]="password"
-            placeholder="••••••••••••"
-            required
-            autocomplete="current-password"
-            [disabled]="isLoading()"
-          />
-          <button
-            type="button"
-            class="input-icon-right"
-            (click)="togglePasswordVisibility()"
-            title="Показать / скрыть пароль"
-          >
-            <app-icon [name]="showPassword() ? 'eye-off' : 'eye'" [size]="16"></app-icon>
+      <!-- Error Alert -->
+      <div class="error-alert" *ngIf="errorMessage()">
+        <app-icon name="alert-triangle" [size]="16"></app-icon>
+        <span>{{ errorMessage() }}</span>
+      </div>
+
+      <!-- Login Form (Strict autofill prevention) -->
+      <form (ngSubmit)="onSubmit()" #loginForm="ngForm" autocomplete="off">
+        <!-- IIN Field -->
+        <div class="form-group">
+          <label for="iin">{{ i18n.t('modal.iin_label') }}</label>
+          <div class="input-wrapper">
+            <span class="input-icon-left">
+              <app-icon name="user" [size]="16"></app-icon>
+            </span>
+            <input
+              id="iin"
+              type="text"
+              name="janamen_auth_iin"
+              maxlength="12"
+              [(ngModel)]="iin"
+              placeholder="Введите 12-значный ИИН"
+              required
+              autocomplete="off"
+              autocorrect="off"
+              autocapitalize="off"
+              spellcheck="false"
+              [disabled]="isLoading()"
+            />
+          </div>
+        </div>
+
+        <!-- Password Field -->
+        <div class="form-group">
+          <label for="password">{{ i18n.t('modal.password_label') }}</label>
+          <div class="input-wrapper">
+            <span class="input-icon-left">
+              <app-icon name="shield" [size]="16"></app-icon>
+            </span>
+            <input
+              id="password"
+              [type]="showPassword() ? 'text' : 'password'"
+              name="janamen_auth_pass"
+              [(ngModel)]="password"
+              placeholder="••••••••••••"
+              required
+              autocomplete="new-password"
+              autocorrect="off"
+              autocapitalize="off"
+              spellcheck="false"
+              [disabled]="isLoading()"
+            />
+            <button
+              type="button"
+              class="input-icon-right"
+              (click)="togglePasswordVisibility()"
+              title="Показать / скрыть пароль"
+            >
+              <app-icon [name]="showPassword() ? 'eye-off' : 'eye'" [size]="16"></app-icon>
+            </button>
+          </div>
+        </div>
+
+        <!-- Submit Button -->
+        <button
+          type="submit"
+          class="submit-btn"
+          [disabled]="isLoading() || !iin || !password"
+        >
+          <span class="spinner" *ngIf="isLoading()"></span>
+          <span *ngIf="!isLoading()">{{ i18n.t('app.login') }}</span>
+          <span *ngIf="isLoading()">Авторизация в системе...</span>
+        </button>
+      </form>
+
+      <!-- Desktop Toggle Button -->
+      <div class="jury-toggle-bar">
+        <button type="button" class="jury-toggle-btn" (click)="toggleJuryPanel()">
+          <app-icon name="users" [size]="15"></app-icon>
+          <span>{{ showJuryPanel() ? 'Скрыть панель жюри' : 'Показать выбор жюри (40)' }}</span>
+        </button>
+      </div>
+
+      <!-- Language Toggle Link -->
+      <div class="login-footer-lang">
+        <button type="button" class="lang-toggle-link" (click)="i18n.toggleLanguage()">
+          {{ i18n.currentLang() === 'ru' ? 'Қазақ тіліне ауысу' : 'Переключить на русский' }}
+        </button>
+      </div>
+    </div>
+
+    <!-- Right Column: Dedicated Jury Quick-Select Panel -->
+    <div class="jury-panel-card" *ngIf="showJuryPanel()" [class.mobile-hidden]="mobileTab() !== 'jury'">
+      <div class="jury-header">
+        <div class="jury-header-top">
+          <div class="jury-badge">
+            <app-icon name="zap" [size]="13"></app-icon>
+            <span>Быстрый выбор для Жюри</span>
+          </div>
+          <div class="jury-password-banner">
+            <span class="pw-label">Пароль для всех:</span>
+            <code class="pw-val">123456</code>
+          </div>
+        </div>
+        <h2 class="jury-title">Учетные записи отделов (40 сотрудников)</h2>
+        <p class="jury-subtitle">
+          Выберите любого руководителя или сотрудника для моментального входа и проверки ролевого доступа.
+        </p>
+      </div>
+
+      <!-- Search Box -->
+      <div class="jury-search-box">
+        <span class="search-icon">
+          <app-icon name="search" [size]="15"></app-icon>
+        </span>
+        <input
+          type="text"
+          placeholder="Поиск по ФИО, ИИН или должности..."
+          [ngModel]="searchQuery()"
+          (ngModelChange)="searchQuery.set($event)"
+        />
+        <button
+          type="button"
+          class="clear-btn"
+          *ngIf="searchQuery()"
+          (click)="searchQuery.set('')"
+          title="Очистить"
+        >
+          ✕
+        </button>
+      </div>
+
+      <!-- Department Filter Tabs -->
+      <div class="jury-dept-tabs">
+        <button
+          type="button"
+          class="dept-tab"
+          [class.active]="selectedDept() === 'all'"
+          (click)="setDept('all')"
+        >
+          Все отделы ({{ allJuryAccounts.length }})
+        </button>
+        <button
+          type="button"
+          class="dept-tab"
+          [class.active]="selectedDept() === 'supply'"
+          (click)="setDept('supply')"
+        >
+          Поставки ({{ countSupply() }})
+        </button>
+        <button
+          type="button"
+          class="dept-tab"
+          [class.active]="selectedDept() === 'logistics'"
+          (click)="setDept('logistics')"
+        >
+          Логистика ({{ countLogistics() }})
+        </button>
+      </div>
+
+      <!-- Role Filter Pills -->
+      <div class="jury-role-pills">
+        <button
+          type="button"
+          class="role-pill"
+          [class.active]="selectedRole() === 'all'"
+          (click)="setRole('all')"
+        >
+          Все роли ({{ allJuryAccounts.length }})
+        </button>
+        <button
+          type="button"
+          class="role-pill"
+          [class.active]="selectedRole() === 'manager'"
+          (click)="setRole('manager')"
+        >
+          Руководители ({{ countManagers() }})
+        </button>
+        <button
+          type="button"
+          class="role-pill"
+          [class.active]="selectedRole() === 'employee'"
+          (click)="setRole('employee')"
+        >
+          Сотрудники ({{ countEmployees() }})
+        </button>
+      </div>
+
+      <!-- Accounts List (Scrollable) -->
+      <div class="jury-accounts-list">
+        <div
+          class="jury-account-item"
+          *ngFor="let acc of filteredAccounts()"
+          (click)="loginAs(acc)"
+          title="Нажмите для мгновенного входа под этим сотрудником"
+        >
+          <!-- Avatar -->
+          <div class="jury-avatar">
+            {{ getInitials(acc.name) }}
+          </div>
+
+          <!-- Info -->
+          <div class="jury-info">
+            <div class="jury-name-row">
+              <span class="jury-name">{{ acc.name }}</span>
+              <span class="role-badge" [ngClass]="'role-' + acc.role">
+                {{ acc.role === 'manager' ? 'Руководитель' : 'Сотрудник' }}
+              </span>
+            </div>
+            <div class="jury-pos-row">
+              <span class="pos-text">{{ acc.position }}</span>
+              <span class="bullet">•</span>
+              <span class="dept-text">{{ acc.dept }}</span>
+            </div>
+            <div class="jury-creds-row">
+              <span class="cred-chip iin-chip">
+                <span class="chip-label">ИИН:</span>
+                <strong>{{ acc.iin }}</strong>
+              </span>
+              <span class="cred-chip pass-chip">
+                <span class="chip-label">Пароль:</span>
+                <strong>{{ acc.password }}</strong>
+              </span>
+            </div>
+          </div>
+
+          <!-- Action Button -->
+          <button type="button" class="jury-login-btn">
+            <span>Войти</span>
+            <app-icon name="chevron-right" [size]="14"></app-icon>
           </button>
         </div>
+
+        <div class="jury-empty-state" *ngIf="filteredAccounts().length === 0">
+          <app-icon name="user-x" [size]="24"></app-icon>
+          <p>Сотрудники по вашему запросу не найдены</p>
+        </div>
       </div>
 
-      <!-- Submit Button -->
-      <button
-        type="submit"
-        class="submit-btn"
-        [disabled]="isLoading() || !iin || !password"
-      >
-        <span class="spinner" *ngIf="isLoading()"></span>
-        <span *ngIf="!isLoading()">{{ i18n.t('app.login') }}</span>
-        <span *ngIf="isLoading()">Авторизация в системе...</span>
-      </button>
-    </form>
-
-    <!-- Language Toggle Link -->
-    <div class="login-footer-lang">
-      <button type="button" class="lang-toggle-link" (click)="i18n.toggleLanguage()">
-        {{ i18n.currentLang() === 'ru' ? 'Қазақ тіліне ауысу' : 'Переключить на русский' }}
-      </button>
+      <!-- Footer Info -->
+      <div class="jury-footer-note">
+        💡 Нажмите на любого сотрудника для моментального входа и проверки изоляции данных его отдела.
+      </div>
     </div>
+
   </div>
 </div>
